@@ -87,4 +87,105 @@ def flag_duplicate_students(df):
     return df
 
 def filter_active_students(df, ref_date, duration_weeks, mode):
-    # Filter by COE Status & Date range according to m
+    # Filter by COE Status & Date range according to mode
+
+    ref_date = pd.to_datetime(ref_date)
+    duration_days = duration_weeks * 7
+    date_from = ref_date
+    date_to = ref_date + pd.Timedelta(days=duration_days)
+    
+    # Prepare status filters
+    if mode == "today":
+        status_incl = ACTIVE_STATUSES_TODAY_FUTURE
+        status_excl = EXCLUDE_STATUSES_TODAY_FUTURE
+    elif mode == "past":
+        status_incl = ACTIVE_STATUSES_PAST
+        status_excl = EXCLUDE_STATUSES_PAST
+    elif mode == "future":
+        status_incl = ACTIVE_STATUSES_TODAY_FUTURE
+        status_excl = EXCLUDE_STATUSES_TODAY_FUTURE
+    else:
+        st.error("Invalid mode selected")
+        return pd.DataFrame()
+
+    # Filter by COE Status inclusion and exclusion
+    filtered = df[df["COE Status"].isin(status_incl) & ~df["COE Status"].isin(status_excl)]
+
+    # Filter by date range overlap with Proposed Start Date and Proposed End Date
+    cond = (
+        (filtered["Proposed Start Date"] <= date_to) &
+        (filtered["Proposed End Date"] >= date_from)
+    )
+    filtered = filtered[cond]
+
+    return filtered
+
+def display_active_students(df):
+    st.write(f"Total active students found: {len(df)}")
+    st.dataframe(df[[
+        "COE Code","COE Status","First Name","Second Name","Family Name",
+        "Course Code","Course Name","Course Language Duration In Weeks",
+        "Proposed Start Date","Proposed End Date"
+    ]])
+
+st.title("Excel Data Analyzer with Multiple Analyzers")
+
+uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx", "xls"])
+
+if uploaded_file is not None:
+    df = pd.read_excel(uploaded_file)
+    missing_cols = check_columns(df)
+    if missing_cols:
+        st.error(f"Uploaded file is missing these required columns: {missing_cols}")
+        st.stop()
+
+    # Parse dates we need
+    date_cols = ["Proposed Start Date", "Proposed End Date"]
+    df = parse_dates(df, date_cols)
+    
+    df = remove_duplicate_coes(df)
+    df = flag_duplicate_students(df)
+    
+    st.success("✅ File uploaded and verified!")
+
+    # Show duplicate student flag count
+    dup_count = df["Duplicate Student"].sum()
+    if dup_count > 0:
+        st.warning(f"⚠️ {dup_count} duplicate students with overlapping COEs detected.")
+
+    # Choose analyzer
+    analyzer = st.selectbox("Choose analyzer", ["Export for CoE and Student Details", "Active Students by Qualification"])
+
+    if analyzer == "Export for CoE and Student Details":
+        st.subheader("Export CoE and Student Details")
+        st.dataframe(df[EXPECTED_COLUMNS])
+
+    elif analyzer == "Active Students by Qualification":
+        st.subheader("Active Students by Qualification")
+
+        mode = st.radio("Select mode:", ["today", "past", "future"], index=0)
+
+        ref_date = st.date_input("Reference Date (for filtering)", datetime.today())
+
+        duration_weeks = st.number_input("Duration in weeks", min_value=1, max_value=520, value=52)
+
+        if st.button("Run Analysis"):
+            result_df = filter_active_students(df, ref_date, duration_weeks, mode)
+
+            # Remove duplicate students flagged to avoid double counting
+            result_df = result_df[~result_df["Duplicate Student"]]
+
+            display_active_students(result_df)
+
+            # Extra: Highlight students with same name + course code but multiple COEs
+            grouped = result_df.groupby(
+                ["First Name", "Second Name", "Family Name", "Course Code"]
+            ).size().reset_index(name="Count")
+            duplicates = grouped[grouped["Count"] > 1]
+
+            if not duplicates.empty:
+                st.info(f"⚠️ Found {len(duplicates)} students with multiple COEs (possible extensions).")
+                st.dataframe(duplicates)
+
+else:
+    st.info("Please upload the Excel file with required fields to proceed.")
