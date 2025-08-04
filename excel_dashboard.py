@@ -41,10 +41,6 @@ def preprocess_data(df):
 
     return df
 
-def detect_duplicates(df):
-    df["Is Duplicate"] = df.duplicated(subset=["Provider Student ID"], keep=False)
-    return df
-
 def filter_by_date(df, mode, today, selected_statuses):
     df = df[df["COE STATUS"].isin(selected_statuses)]
     if mode == "Past":
@@ -54,6 +50,11 @@ def filter_by_date(df, mode, today, selected_statuses):
     elif mode == "Future":
         return df[df["Proposed Start Date"] > today]
     return df
+
+def mark_duplicates_by_id(filtered_df):
+    filtered_df = filtered_df.copy()
+    filtered_df["Is Duplicate"] = filtered_df.duplicated(subset=["Provider Student ID"], keep=False)
+    return filtered_df
 
 def style_duplicates(df):
     def highlight_row(row):
@@ -70,7 +71,6 @@ if uploaded_file:
     try:
         df_raw = pd.read_excel(uploaded_file)
         df = preprocess_data(df_raw)
-        df = detect_duplicates(df)
 
         all_statuses = df["COE STATUS"].dropna().unique().tolist()
         selected_statuses = st.multiselect("Select COE Status to include", all_statuses, default=all_statuses)
@@ -81,16 +81,19 @@ if uploaded_file:
 
         with tab1:
             df_past = filter_by_date(df, "Past", today, selected_statuses)
+            df_past = mark_duplicates_by_id(df_past)
             st.write(f"Past Students: {len(df_past)} found")
             st.dataframe(style_duplicates(df_past), use_container_width=True)
 
         with tab2:
             df_today = filter_by_date(df, "Today", today, selected_statuses)
+            df_today = mark_duplicates_by_id(df_today)
             st.write(f"Today Active Students: {len(df_today)} found")
             st.dataframe(style_duplicates(df_today), use_container_width=True)
 
         with tab3:
             df_future = filter_by_date(df, "Future", today, selected_statuses)
+            df_future = mark_duplicates_by_id(df_future)
             st.write(f"Future Students: {len(df_future)} found")
             st.dataframe(style_duplicates(df_future), use_container_width=True)
 
