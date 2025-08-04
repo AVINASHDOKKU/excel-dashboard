@@ -42,7 +42,7 @@ def preprocess_data(df):
     return df
 
 def detect_duplicates(df):
-    dup_key = ["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]
+    dup_key = ["Provider Student ID", "FAMILY NAME"]
     df["Is Duplicate"] = df.duplicated(subset=dup_key, keep=False)
     return df
 
