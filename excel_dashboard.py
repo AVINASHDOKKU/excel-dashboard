@@ -1,15 +1,13 @@
 import streamlit as st
 import pandas as pd
 import datetime
-from io import BytesIO
 
 st.set_page_config(page_title="COE Student Analyzer", layout="wide")
 
 st.title("📘 COE Student Analyzer")
-
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
-# Expected columns mapping
+# Define expected columns
 expected_columns = {
     "COE CODE": "COE CODE",
     "COE STATUS": "COE STATUS",
@@ -22,8 +20,8 @@ expected_columns = {
     "PROPOSED START DATE": "Proposed Start Date",
     "PROPOSED END DATE": "Proposed End Date",
     "PROVIDER STUDENT ID": "Provider Student ID",
-    "AGENT NAME": "AGENT NAME",  # Optional column if available
-    "VISA EXPIRY DATE": "Visa Expiry Date"  # Optional
+    "VISA EXPIRY DATE": "Visa Expiry Date",
+    "AGENT": "AGENT"
 }
 
 # --- Utility Functions ---
@@ -38,15 +36,11 @@ def rename_columns(df):
 def preprocess_data(df):
     df = normalize_columns(df)
     df = rename_columns(df)
-    # Keep only available expected columns
-    cols_to_keep = [col for col in expected_columns.values() if col in df.columns]
-    df = df[cols_to_keep]
-    if "Proposed Start Date" in df:
-        df["Proposed Start Date"] = pd.to_datetime(df["Proposed Start Date"], errors="coerce")
-    if "Proposed End Date" in df:
-        df["Proposed End Date"] = pd.to_datetime(df["Proposed End Date"], errors="coerce")
-    if "Visa Expiry Date" in df:
-        df["Visa Expiry Date"] = pd.to_datetime(df["Visa Expiry Date"], errors="coerce")
+    df["Proposed Start Date"] = pd.to_datetime(df.get("Proposed Start Date"), errors="coerce")
+    df["Proposed End Date"] = pd.to_datetime(df.get("Proposed End Date"), errors="coerce")
+    if "Visa Expiry Date" in df.columns:
+        df["Visa Expiry Date"] = pd.to_datetime(df.get("Visa Expiry Date"), errors="coerce")
+    df.dropna(subset=["Proposed Start Date", "Proposed End Date"], inplace=True)
     return df
 
 def detect_duplicates_by_id(filtered_df):
@@ -76,46 +70,35 @@ def filter_by_date(df, mode, today, selected_statuses):
         return df[df["Proposed Start Date"] > today]
     return df
 
-def course_duration_validator(df):
-    df = df.copy()
-    df["Actual Weeks"] = ((df["Proposed End Date"] - df["Proposed Start Date"]).dt.days / 7).round(1)
-    df["Duration Mismatch"] = abs(df["Actual Weeks"] - df["DURATION IN WEEKS"]) > 1
-    return df
+# --- New Suggested Modules ---
 
-def weekly_start_count(df):
-    weekly = df.copy()
-    weekly["Week Start"] = weekly["Proposed Start Date"].dt.to_period("W").apply(lambda r: r.start_time)
-    count = weekly.groupby("Week Start").size().reset_index(name="Students Starting")
-    return count
-
-def monthly_start_count(df):
-    monthly = df.copy()
-    monthly["Month"] = monthly["Proposed Start Date"].dt.to_period("M").astype(str)
-    count = monthly.groupby("Month").size().reset_index(name="Students Starting")
-    return count
-
-def agent_summary(df):
-    if "AGENT NAME" not in df.columns:
-        return None
-    return df.groupby("AGENT NAME").agg(
-        Students=("Provider Student ID", "count")
-    ).reset_index()
-
-def visa_expiry_filter(df, days_threshold, today):
+def visa_expiry_tracker(df, days=30):
     if "Visa Expiry Date" not in df.columns:
         return pd.DataFrame()
-    future_date = today + pd.Timedelta(days=days_threshold)
-    return df[(df["Visa Expiry Date"].notna()) & (df["Visa Expiry Date"] <= future_date)]
+    future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(days, unit="d")
+    return df[(df["Visa Expiry Date"] >= pd.to_datetime(datetime.date.today())) & (df["Visa Expiry Date"] <= future_limit)]
 
-def coe_expiry_filter(df, days_threshold, today):
-    future_date = today + pd.Timedelta(days=days_threshold)
-    return df[df["Proposed End Date"] <= future_date]
+def coe_expiry_tracker(df, within_days=30):
+    future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(within_days, unit="d")
+    return df[(df["Proposed End Date"] >= pd.to_datetime(datetime.date.today())) & (df["Proposed End Date"] <= future_limit)]
 
-def generate_contact_csv(df):
-    contact_cols = ["FIRST NAME", "FAMILY NAME", "Provider Student ID"]
-    available_cols = [c for c in contact_cols if c in df.columns]
-    return df[available_cols].to_csv(index=False).encode("utf-8")
+def course_duration_validator(df):
+    df["Actual Weeks"] = (df["Proposed End Date"] - df["Proposed Start Date"]).dt.days // 7
+    df["Duration Mismatch"] = df["Actual Weeks"] != df["DURATION IN WEEKS"]
+    return df[df["Duration Mismatch"]]
 
+def weekly_start_count(df):
+    df["Start Week"] = df["Proposed Start Date"].dt.isocalendar().week
+    return df.groupby("Start Week")["Provider Student ID"].count().reset_index(name="Number of Starts")
+
+def agent_summary(df):
+    if "AGENT" in df.columns:
+        return df.groupby("AGENT").agg(
+            Total_Students=("Provider Student ID", "count"),
+            Active_Students=("COE STATUS", lambda x: (x == "Active").sum())
+        ).reset_index()
+    else:
+        return pd.DataFrame()
 
 # --- Main App Logic ---
 
@@ -129,14 +112,10 @@ if uploaded_file:
 
         today = pd.to_datetime(datetime.date.today())
 
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-            "⏪ Past Students",
-            "🟢 Today Active Students",
-            "⏩ Future Students",
-            "⚠️ Visa Expiry Tracker",
-            "📅 COE Expiry Tracker",
-            "✅ Course Duration Validator",
-            "📈 Weekly/Monthly Starts"
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+            "⏪ Past Students", "🟢 Today Active", "⏩ Future Students",
+            "🛂 Visa Expiry Tracker", "📝 COE Expiry Tracker", "⏰ Course Duration Validator",
+            "📅 Weekly Starts", "👤 Agent Summary"
         ])
 
         # Past Students
@@ -160,50 +139,44 @@ if uploaded_file:
             st.write(f"Future Students: {len(df_future)} found")
             st.dataframe(style_duplicates(df_future), use_container_width=True)
 
-        # Visa Expiry
+        # Visa Expiry Tracker
         with tab4:
-            if "Visa Expiry Date" not in df.columns:
-                st.warning("Visa Expiry Date column not found.")
-            else:
-                days = st.slider("Show visas expiring in next X days:", 7, 180, 30)
-                visa_expiring = visa_expiry_filter(df, days, today)
-                st.write(f"Students with Visa expiring in next {days} days: {len(visa_expiring)}")
-                st.dataframe(visa_expiring, use_container_width=True)
+            visa_days = st.slider("Visa expiring in next X days", 7, 180, 30)
+            df_visa = visa_expiry_tracker(df, visa_days)
+            st.write(f"{len(df_visa)} students with visa expiring in {visa_days} days")
+            st.dataframe(df_visa, use_container_width=True)
 
-        # COE Expiry
+        # COE Expiry Tracker
         with tab5:
-            days = st.slider("Show COEs expiring in next X days:", 7, 180, 30)
-            coe_expiring = coe_expiry_filter(df, days, today)
-            st.write(f"Students with COE expiring in next {days} days: {len(coe_expiring)}")
-            st.dataframe(coe_expiring, use_container_width=True)
+            coe_days = st.slider("COE expiring in next X days", 7, 180, 30)
+            df_coe = coe_expiry_tracker(df, coe_days)
+            st.write(f"{len(df_coe)} students with COE expiring in {coe_days} days")
+            st.dataframe(df_coe, use_container_width=True)
 
-        # Duration Validator
+        # Course Duration Validator
         with tab6:
-            df_validated = course_duration_validator(df)
-            st.write("Flagging inconsistencies between actual and recorded duration (>1 week difference):")
-            st.dataframe(df_validated[df_validated["Duration Mismatch"]], use_container_width=True)
+            df_mismatch = course_duration_validator(df)
+            st.write(f"{len(df_mismatch)} students with duration mismatch")
+            st.dataframe(df_mismatch, use_container_width=True)
 
-        # Weekly/Monthly Starts
+        # Weekly Starts
         with tab7:
-            st.subheader("Weekly Starts")
-            weekly = weekly_start_count(df)
-            st.dataframe(weekly, use_container_width=True)
+            weekly_counts = weekly_start_count(df)
+            st.bar_chart(weekly_counts, x="Start Week", y="Number of Starts")
 
-            st.subheader("Monthly Starts")
-            monthly = monthly_start_count(df)
-            st.dataframe(monthly, use_container_width=True)
+        # Agent Summary
+        with tab8:
+            df_agent = agent_summary(df)
+            if not df_agent.empty:
+                st.dataframe(df_agent, use_container_width=True)
+            else:
+                st.info("No agent column found in the uploaded file.")
 
-        # Agent Summary (if available)
-        if "AGENT NAME" in df.columns:
-            st.subheader("Agent-wise Summary")
-            summary = agent_summary(df)
-            st.dataframe(summary, use_container_width=True)
-
-        # Download Contact Sheet
-        st.subheader("🎯 Download Contact Sheet")
-        filtered_df = df[df["COE STATUS"].isin(selected_statuses)]
-        csv_data = generate_contact_csv(filtered_df)
-        st.download_button("Download Contacts CSV", data=csv_data, file_name="contacts.csv", mime="text/csv")
+        # Student Contact Sheet Generator
+        st.sidebar.subheader("📥 Download Contact Sheet")
+        contact_df = df[["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]].drop_duplicates()
+        csv = contact_df.to_csv(index=False).encode('utf-8')
+        st.sidebar.download_button("Download Contact Sheet CSV", csv, file_name="contact_sheet.csv", mime="text/csv")
 
     except Exception as e:
         st.error(f"❌ Error: {e}")
