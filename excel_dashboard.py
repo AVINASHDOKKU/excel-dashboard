@@ -43,15 +43,6 @@ def preprocess_data(df):
 def detect_duplicates(df):
     dup_key = ["Provider Student ID", "FAMILY NAME", "COURSE NAME"]
     df["Is Duplicate"] = df.duplicated(subset=dup_key, keep=False)
-
-    df["Date Overlap"] = False
-    grouped = df[df["Is Duplicate"]].groupby(dup_key)
-    for _, group in grouped:
-        group = group.sort_values("Proposed Start Date")
-        for i in range(len(group) - 1):
-            if group.iloc[i]["Proposed End Date"] >= group.iloc[i + 1]["Proposed Start Date"]:
-                df.loc[group.index[i], "Date Overlap"] = True
-                df.loc[group.index[i + 1], "Date Overlap"] = True
     return df
 
 def filter_by_date(df, mode, today, selected_statuses):
@@ -66,12 +57,10 @@ def filter_by_date(df, mode, today, selected_statuses):
 
 def style_duplicates(df):
     def highlight_row(row):
-        styles = [''] * len(row)
         if row.get("Is Duplicate", False):
-            styles = ['background-color: khaki'] * len(row)
-        if row.get("Date Overlap", False):
-            styles = ['background-color: lightcoral'] * len(row)
-        return styles
+            return ['background-color: khaki'] * len(row)
+        return [''] * len(row)
+
     return df.style.apply(highlight_row, axis=1).format({
         "Proposed Start Date": lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "",
         "Proposed End Date": lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else ""
