@@ -2,98 +2,98 @@ import streamlit as st
 import pandas as pd
 import datetime
 
-st.set_page_config(page_title="Excel Data Analyzer", layout="wide")
+st.set_page_config(page_title="COE Student Analyzer", layout="wide")
 
-st.title("📊 Excel Data Analyzer - Export for CoE and Student Details")
-st.markdown("Upload your Excel file")
+st.title("📘 COE Student Analyzer")
+uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
-uploaded_file = st.file_uploader("Drag and drop file here", type=["xlsx"])
+# Fields to keep
+columns_required = [
+    "COE CODE", "COE STATUS", "FIRST NAME", "SECOND NAME", "FAMILY NAME",
+    "COURSE CODE", "COURSE NAME", "DURATION IN WEEKS",
+    "Proposed Start Date", "Proposed End Date", "Provider Student ID"
+]
+
+def preprocess_data(df):
+    df = df.copy()
+    df.columns = df.columns.str.strip()  # Clean column names
+    df = df[[col for col in columns_required if col in df.columns]]  # Keep only required
+
+    # Convert dates
+    df["Proposed Start Date"] = pd.to_datetime(df["Proposed Start Date"], errors="coerce")
+    df["Proposed End Date"] = pd.to_datetime(df["Proposed End Date"], errors="coerce")
+
+    # Drop rows with missing essential dates
+    df.dropna(subset=["Proposed Start Date", "Proposed End Date"], inplace=True)
+
+    return df
+
+def detect_duplicates(df):
+    dup_key = ["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME", "COURSE NAME"]
+    df["Is Duplicate"] = df.duplicated(subset=dup_key, keep=False)
+
+    # Detect overlapping dates within same duplicate group
+    df["Date Overlap"] = False
+    grouped = df[df["Is Duplicate"]].groupby(dup_key)
+
+    for _, group in grouped:
+        group = group.sort_values("Proposed Start Date")
+        for i in range(len(group) - 1):
+            end_current = group.iloc[i]["Proposed End Date"]
+            start_next = group.iloc[i + 1]["Proposed Start Date"]
+            if end_current >= start_next:
+                df.loc[group.index[i], "Date Overlap"] = True
+                df.loc[group.index[i + 1], "Date Overlap"] = True
+    return df
+
+def filter_by_date(df, mode, today):
+    if mode == "Past":
+        return df[df["Proposed End Date"] < today]
+    elif mode == "Today":
+        return df[df["Proposed Start Date"] <= today]
+    elif mode == "Future":
+        return df[df["Proposed Start Date"] > today]
+    return df
+
+def style_duplicates(df):
+    def highlight_row(row):
+        color = ''
+        if row.get("Date Overlap", False):
+            color = 'background-color: lightcoral'
+        elif row.get("Is Duplicate", False):
+            color = 'background-color: khaki'
+        return [color] * len(row)
+    return df.style.apply(highlight_row, axis=1)
 
 if uploaded_file:
     try:
-        df_raw = pd.read_excel(uploaded_file, skiprows=0)
+        df_raw = pd.read_excel(uploaded_file)
+        df = preprocess_data(df_raw)
+        df = detect_duplicates(df)
+
+        st.success("✅ File processed successfully")
+
+        # Date for reference
+        today = pd.to_datetime(datetime.date.today())
+
+        tab1, tab2, tab3 = st.tabs(["⏪ Past Students", "🟢 Today Active Students", "⏩ Future Students"])
+
+        with tab1:
+            df_past = filter_by_date(df, "Past", today)
+            st.write(f"Past Students: {len(df_past)} found")
+            st.dataframe(style_duplicates(df_past), use_container_width=True)
+
+        with tab2:
+            df_today = filter_by_date(df, "Today", today)
+            st.write(f"Today Active Students: {len(df_today)} found")
+            st.dataframe(style_duplicates(df_today), use_container_width=True)
+
+        with tab3:
+            df_future = filter_by_date(df, "Future", today)
+            st.write(f"Future Students: {len(df_future)} found")
+            st.dataframe(style_duplicates(df_future), use_container_width=True)
+
     except Exception as e:
-        st.error(f"❌ Failed to read Excel file: {e}")
-        st.stop()
-
-    st.success("✅ File uploaded and cleaned successfully.")
-    
-    # Remove fully empty columns
-    df_raw.dropna(axis=1, how='all', inplace=True)
-
-    # Convert date columns
-    date_cols = ["Proposed Start Date", "Proposed End Date"]
-    for col in date_cols:
-        if col in df_raw.columns:
-            df_raw[col] = pd.to_datetime(df_raw[col], errors='coerce')
-
-    # Status selection
-    available_statuses = df_raw["COE Status"].dropna().unique().tolist()
-    selected_statuses = st.multiselect(
-        "Select COE Status(es) to include in analysis",
-        options=available_statuses,
-        default=available_statuses
-    )
-
-    # Date reference
-    ref_date = st.date_input(
-        "Reference date for analysis",
-        datetime.date.today()
-    )
-
-    st.markdown("## 📌 Sheet Preview")
-    st.dataframe(df_raw.head(50), use_container_width=True)
-
-    st.markdown("---")
-
-    # Filter function
-    def filter_by_date(df_sub, mode):
-        date = pd.to_datetime(ref_date).normalize()
-        df_filtered = df_sub[
-            df_sub["COE Status"].isin(selected_statuses) &
-            df_sub["Proposed Start Date"].notna()
-        ]
-
-        if mode == "Past":
-            return df_filtered[df_filtered["Proposed End Date"] < date]
-
-        elif mode == "Future":
-            return df_filtered[df_filtered["Proposed Start Date"] > date]
-
-        else:  # Today: show all started on/before today
-            df_today = df_filtered[df_filtered["Proposed Start Date"] <= date]
-
-            # Mark duplicates based on Provider Student ID
-            if "Provider Student ID" in df_today.columns:
-                df_today = df_today.copy()
-                df_today["Is Duplicate"] = df_today.duplicated(subset="Provider Student ID", keep=False)
-            return df_today
-
-    # Tabs
-    tab_past, tab_today, tab_future = st.tabs(["⏪ Past Students", "🟢 Today Active Students", "⏩ Future Students"])
-
-    with tab_past:
-        past_df = filter_by_date(df_raw, "Past")
-        st.write(f"Past Students: {len(past_df)} records found")
-        st.dataframe(past_df, use_container_width=True)
-
-    with tab_today:
-        today_df = filter_by_date(df_raw, "Today")
-        st.write(f"Today Active Students (all students started on or before today): {len(today_df)} records found")
-
-        # Highlight duplicates if present
-        if "Is Duplicate" in today_df.columns:
-            st.dataframe(today_df.style.apply(
-                lambda row: ['background-color: yellow' if row['Is Duplicate'] else '' for _ in row],
-                axis=1
-            ), use_container_width=True)
-        else:
-            st.dataframe(today_df, use_container_width=True)
-
-    with tab_future:
-        future_df = filter_by_date(df_raw, "Future")
-        st.write(f"Future Students: {len(future_df)} records found")
-        st.dataframe(future_df, use_container_width=True)
-
+        st.error(f"❌ Error reading file: {e}")
 else:
-    st.info("👆 Upload an Excel file above to begin analysis.")
+    st.info("👆 Please upload an Excel file to begin.")
