@@ -70,16 +70,6 @@ def style_duplicates(df):
         "Visa Expiry Date": lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else ""
     })
 
-def filter_by_date(df, mode, today, selected_statuses):
-    df = df[df["COE STATUS"].isin(selected_statuses)]
-    if mode == "Past":
-        return df[df["Proposed End Date"] < today]
-    elif mode == "Today":
-        return df[(df["Proposed Start Date"] <= today) & (df["Proposed End Date"] >= today)]
-    elif mode == "Future":
-        return df[df["Proposed Start Date"] > today]
-    return df
-
 # --- New Suggested Modules ---
 
 def visa_expiry_tracker(df, days=30):
@@ -122,71 +112,64 @@ if uploaded_file:
 
         today = pd.to_datetime(datetime.date.today())
 
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-            "⏪ Past Students", "🟢 Today Active", "⏩ Future Students",
-            "🛂 Visa Expiry Tracker", "📝 COE Expiry Tracker", "⏰ Course Duration Validator",
-            "📅 Weekly Starts", "👤 Agent Summary"
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+            "📆 Students by Start Date Range", "🛂 Visa Expiry Tracker",
+            "📝 COE Expiry Tracker", "⏰ Course Duration Validator",
+            "📅 Weekly Starts", "👤 Agent Summary", "📥 Download Contact Sheet"
         ])
 
-        # Past Students
+        # Combined Past/Today/Future using date filter
         with tab1:
-            df_past = filter_by_date(df, "Past", today, selected_statuses)
-            df_past = detect_duplicates_by_id(df_past)
-            st.write(f"Past Students: {len(df_past)} found")
-            st.dataframe(style_duplicates(df_past), use_container_width=True)
-
-        # Today Active
-        with tab2:
-            df_today = filter_by_date(df, "Today", today, selected_statuses)
-            df_today = detect_duplicates_by_id(df_today)
-            st.write(f"Today Active Students: {len(df_today)} found")
-            st.dataframe(style_duplicates(df_today), use_container_width=True)
-
-        # Future Students
-        with tab3:
-            df_future = filter_by_date(df, "Future", today, selected_statuses)
-            df_future = detect_duplicates_by_id(df_future)
-            st.write(f"Future Students: {len(df_future)} found")
-            st.dataframe(style_duplicates(df_future), use_container_width=True)
+            min_date = df["Proposed Start Date"].min()
+            max_date = df["Proposed Start Date"].max()
+            start_date, end_date = st.date_input("Select Proposed Start Date Range", [min_date, max_date])
+            filtered_df = df[
+                (df["COE STATUS"].isin(selected_statuses)) &
+                (df["Proposed Start Date"] >= pd.to_datetime(start_date)) &
+                (df["Proposed Start Date"] <= pd.to_datetime(end_date))
+            ]
+            filtered_df = detect_duplicates_by_id(filtered_df)
+            st.write(f"{len(filtered_df)} students found")
+            st.dataframe(style_duplicates(filtered_df), use_container_width=True)
 
         # Visa Expiry Tracker
-        with tab4:
+        with tab2:
             visa_days = st.slider("Visa expiring in next X days", 7, 180, 30)
             df_visa = visa_expiry_tracker(df, visa_days)
             st.write(f"{len(df_visa)} students with visa expiring in {visa_days} days")
             st.dataframe(df_visa, use_container_width=True)
 
         # COE Expiry Tracker
-        with tab5:
+        with tab3:
             coe_days = st.slider("COE expiring in next X days", 7, 180, 30)
             df_coe = coe_expiry_tracker(df, coe_days)
             st.write(f"{len(df_coe)} students with COE expiring in {coe_days} days")
             st.dataframe(df_coe, use_container_width=True)
 
         # Course Duration Validator
-        with tab6:
+        with tab4:
             df_mismatch = course_duration_validator(df)
             st.write(f"{len(df_mismatch)} students with duration mismatch")
             st.dataframe(df_mismatch, use_container_width=True)
 
         # Weekly Starts
-        with tab7:
+        with tab5:
             weekly_counts = weekly_start_count(df)
             st.bar_chart(weekly_counts, x="Start Week", y="Number of Starts")
 
         # Agent Summary
-        with tab8:
+        with tab6:
             df_agent = agent_summary(df)
             if not df_agent.empty:
                 st.dataframe(df_agent, use_container_width=True)
             else:
                 st.info("No agent column found in the uploaded file.")
 
-        # Student Contact Sheet Generator
-        st.sidebar.subheader("📥 Download Contact Sheet")
-        contact_df = df[["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]].drop_duplicates()
-        csv = contact_df.to_csv(index=False).encode('utf-8')
-        st.sidebar.download_button("Download Contact Sheet CSV", csv, file_name="contact_sheet.csv", mime="text/csv")
+        # Contact Sheet
+        with tab7:
+            contact_df = df[["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]].drop_duplicates()
+            csv = contact_df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download Contact Sheet CSV", csv, file_name="contact_sheet.csv", mime="text/csv")
 
     except Exception as e:
         st.error(f"❌ Error: {e}")
