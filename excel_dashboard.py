@@ -42,8 +42,7 @@ def preprocess_data(df):
     return df
 
 def detect_duplicates(df):
-    dup_key = ["Provider Student ID", "FAMILY NAME"]
-    df["Is Duplicate"] = df.duplicated(subset=dup_key, keep=False)
+    df["Is Duplicate"] = df.duplicated(subset=["Provider Student ID"], keep=False)
     return df
 
 def filter_by_date(df, mode, today, selected_statuses):
