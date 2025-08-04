@@ -34,6 +34,7 @@ def preprocess_data(df):
     df = rename_columns(df)
     df = df[list(expected_columns.values())]
 
+    # Convert dates
     df["Proposed Start Date"] = pd.to_datetime(df["Proposed Start Date"], errors="coerce")
     df["Proposed End Date"] = pd.to_datetime(df["Proposed End Date"], errors="coerce")
     df.dropna(subset=["Proposed Start Date", "Proposed End Date"], inplace=True)
@@ -41,7 +42,7 @@ def preprocess_data(df):
     return df
 
 def detect_duplicates(df):
-    dup_key = ["Provider Student ID", "FAMILY NAME", "COURSE NAME"]
+    dup_key = ["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]
     df["Is Duplicate"] = df.duplicated(subset=dup_key, keep=False)
     return df
 
