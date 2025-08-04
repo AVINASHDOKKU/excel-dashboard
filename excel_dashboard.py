@@ -5,12 +5,11 @@ from datetime import datetime
 st.set_page_config(page_title="Excel Data Analyzer", layout="wide")
 st.title("📊 Excel Data Analyzer - Export for CoE and Student Details")
 
-# File uploader
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 if uploaded_file:
     df = pd.read_excel(uploaded_file, sheet_name=0)
 
-    # --- CLEANING SECTION ---
+    # --- CLEANING ---
     df.columns = df.columns.str.strip()
     for col in df.select_dtypes(include='object').columns:
         df[col] = df[col].astype(str).str.strip()
@@ -24,16 +23,20 @@ if uploaded_file:
             df[col] = pd.to_datetime(df[col], errors='coerce')
 
     st.success("✅ File uploaded and cleaned successfully.")
-    st.subheader("📌 Sheet Preview")
-    st.dataframe(df.head(10), use_container_width=True)
+    st.subheader("📌 Sheet Preview (Full Data with Pagination)")
+
+    # Show ALL rows with pagination and dynamic sizing
+    st.dataframe(
+        df,
+        use_container_width=True,
+        height=min(800, len(df) * 35 + 50)
+    )
 
     # --- ANALYSIS SECTION ---
     analysis_type = st.selectbox("Choose Analysis Type", ["Active Students by Qualification"])
 
     if analysis_type == "Active Students by Qualification":
         st.subheader("🎓 Active Students by Qualification")
-
-        # Input date and min duration
         ref_date = st.date_input("Select Date", datetime.today())
         min_weeks = st.number_input("Show students with duration less than (weeks)", min_value=1, value=12)
 
@@ -41,7 +44,6 @@ if uploaded_file:
         status_all = status_active + ["CANCELLED", "FINISHED"]
         exclude_status = ["SAVED"]
 
-        # Utility function
         def filter_by_date(df_sub, mode):
             if mode == "Today":
                 status_filter = status_active
@@ -49,7 +51,7 @@ if uploaded_file:
             elif mode == "Past":
                 status_filter = status_all
                 date = pd.to_datetime(ref_date)
-            else:  # Future
+            else:
                 status_filter = status_active
                 date = pd.to_datetime(ref_date)
 
@@ -69,7 +71,7 @@ if uploaded_file:
                 return df_filtered[
                     (df_filtered["Proposed Start Date"] > date)
                 ]
-            else:  # Today
+            else:
                 return df_filtered[
                     (df_filtered["Proposed Start Date"] <= date) &
                     (df_filtered["Proposed End Date"] >= date)
@@ -81,18 +83,11 @@ if uploaded_file:
         for tab, mode in zip(tabs, modes):
             with tab:
                 filtered = filter_by_date(df, mode)
-                # Avoid duplicates
                 filtered = filtered.drop_duplicates(subset=["COE Code"])
-                # Filter by duration
                 if "Duration In Weeks" in filtered.columns:
                     filtered = filtered[pd.to_numeric(filtered["Duration In Weeks"], errors='coerce') < min_weeks]
 
-                display_cols = [
-                    "COE Code", "COE Status", "First Name", "Second Name", "Family Name",
-                    "Course Code", "Course Name", "Duration In Weeks", "Proposed Start Date", "Proposed End Date"
-                ]
-                existing_cols = [col for col in display_cols if col in filtered.columns]
                 st.write(f"### {mode} Active Students: {len(filtered)} records found")
-                st.dataframe(filtered[existing_cols], use_container_width=True)
-                csv = filtered[existing_cols].to_csv(index=False).encode("utf-8")
+                st.dataframe(filtered, use_container_width=True)
+                csv = filtered.to_csv(index=False).encode("utf-8")
                 st.download_button("Download CSV", csv, file_name=f"active_students_{mode.lower()}.csv", mime="text/csv")
