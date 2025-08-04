@@ -17,7 +17,7 @@ EXPECTED_COLUMNS = [
     "Broad Field Of Education 1","Narrow Field Of Education 1","Detailed Field Of Education 1",
     "Broad Field Of Education 2","Narrow Field Of Education 2","Detailed Field Of Education 2",
     "Course Level","VET National Code","Foundation Studies","Work Component","Work Component Hrs/ Wk",
-    "Work Component Weeks","Work Component Total Hours","Course Language Duration In Weeks",
+    "Work Component Weeks","Work Component Total Hours","Course Language", Duration In Weeks",
     "Current Total Course Fee","Proposed Start Date","Proposed End Date","Actual Start Date",
     "Actual End Date","Total Course Fee","Prepaid Course Fee","Visa Granted","Visa Grant Status",
     "Visa Grant Number","Visa Non  Grant Status","Visa Non Grant Action Date","Visa Effective Date",
