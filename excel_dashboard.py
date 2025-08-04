@@ -3,10 +3,8 @@ import pandas as pd
 import datetime
 
 st.set_page_config(page_title="COE Student Analyzer", layout="wide")
-
 st.title("📘 COE Student Analyzer")
 
-# Launch button
 if 'launch' not in st.session_state:
     st.session_state.launch = False
 
@@ -65,9 +63,9 @@ def style_duplicates(df):
         return [''] * len(row)
 
     return df.style.apply(highlight_row, axis=1).format({
-        "Proposed Start Date": lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "",
-        "Proposed End Date": lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "",
-        "Visa Expiry Date": lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else ""
+        "Proposed Start Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
+        "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
+        "Visa Expiry Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
     })
 
 # --- New Suggested Modules ---
@@ -118,7 +116,7 @@ if uploaded_file:
             "📅 Weekly Starts", "👤 Agent Summary", "📥 Download Contact Sheet"
         ])
 
-        # Combined Past/Today/Future using date filter
+        # Students by Start Date Range
         with tab1:
             min_date = df["Proposed Start Date"].min()
             max_date = df["Proposed Start Date"].max()
@@ -137,20 +135,27 @@ if uploaded_file:
             visa_days = st.slider("Visa expiring in next X days", 7, 180, 30)
             df_visa = visa_expiry_tracker(df, visa_days)
             st.write(f"{len(df_visa)} students with visa expiring in {visa_days} days")
-            st.dataframe(df_visa, use_container_width=True)
+            st.dataframe(df_visa.style.format({
+                "Visa Expiry Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
+            }), use_container_width=True)
 
         # COE Expiry Tracker
         with tab3:
             coe_days = st.slider("COE expiring in next X days", 7, 180, 30)
             df_coe = coe_expiry_tracker(df, coe_days)
             st.write(f"{len(df_coe)} students with COE expiring in {coe_days} days")
-            st.dataframe(df_coe, use_container_width=True)
+            st.dataframe(df_coe.style.format({
+                "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
+            }), use_container_width=True)
 
         # Course Duration Validator
         with tab4:
             df_mismatch = course_duration_validator(df)
             st.write(f"{len(df_mismatch)} students with duration mismatch")
-            st.dataframe(df_mismatch, use_container_width=True)
+            st.dataframe(df_mismatch.style.format({
+                "Proposed Start Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
+                "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
+            }), use_container_width=True)
 
         # Weekly Starts
         with tab5:
