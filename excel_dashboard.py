@@ -34,7 +34,6 @@ def preprocess_data(df):
     df = rename_columns(df)
     df = df[list(expected_columns.values())]
 
-    # Convert dates
     df["Proposed Start Date"] = pd.to_datetime(df["Proposed Start Date"], errors="coerce")
     df["Proposed End Date"] = pd.to_datetime(df["Proposed End Date"], errors="coerce")
     df.dropna(subset=["Proposed Start Date", "Proposed End Date"], inplace=True)
@@ -42,7 +41,7 @@ def preprocess_data(df):
     return df
 
 def detect_duplicates(df):
-    dup_key = ["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME", "COURSE NAME"]
+    dup_key = ["Provider Student ID", "FAMILY NAME", "COURSE NAME"]
     df["Is Duplicate"] = df.duplicated(subset=dup_key, keep=False)
 
     df["Date Overlap"] = False
@@ -67,11 +66,12 @@ def filter_by_date(df, mode, today, selected_statuses):
 
 def style_duplicates(df):
     def highlight_row(row):
+        styles = [''] * len(row)
+        if row.get("Is Duplicate", False):
+            styles = ['background-color: khaki'] * len(row)
         if row.get("Date Overlap", False):
-            return ['background-color: lightcoral'] * len(row)
-        elif row.get("Is Duplicate", False):
-            return ['background-color: khaki'] * len(row)
-        return [''] * len(row)
+            styles = ['background-color: lightcoral'] * len(row)
+        return styles
     return df.style.apply(highlight_row, axis=1).format({
         "Proposed Start Date": lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else "",
         "Proposed End Date": lambda x: x.strftime('%d-%m-%Y') if pd.notnull(x) else ""
