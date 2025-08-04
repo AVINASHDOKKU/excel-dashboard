@@ -1,92 +1,92 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+import datetime
 
 st.set_page_config(page_title="Excel Data Analyzer", layout="wide")
+
 st.title("📊 Excel Data Analyzer - Export for CoE and Student Details")
+st.markdown("Upload your Excel file")
 
-uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
+uploaded_file = st.file_uploader("Drag and drop file here", type=["xlsx"])
+
 if uploaded_file:
-    df = pd.read_excel(uploaded_file, sheet_name=0)
-
-    # --- CLEANING ---
-    df.columns = df.columns.str.strip()
-    for col in df.select_dtypes(include='object').columns:
-        df[col] = df[col].astype(str).str.strip()
-
-    date_columns = [
-        "Proposed Start Date", "Proposed End Date", "Actual Start Date", "Actual End Date",
-        "COE Created Date", "Visa Effective Date", "Visa End Date"
-    ]
-    for col in date_columns:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors='coerce')
-
-    # Normalize COE Status values to uppercase without leading/trailing spaces
-    if "COE Status" in df.columns:
-        df["COE Status"] = df["COE Status"].str.upper().str.strip()
+    try:
+        df_raw = pd.read_excel(uploaded_file, skiprows=0)
+    except Exception as e:
+        st.error(f"❌ Failed to read Excel file: {e}")
+        st.stop()
 
     st.success("✅ File uploaded and cleaned successfully.")
-    st.subheader("📌 Sheet Preview (Full Data with Pagination)")
+    
+    # Clean up: remove completely empty columns
+    df_raw.dropna(axis=1, how='all', inplace=True)
 
-    st.dataframe(
-        df,
-        use_container_width=True,
-        height=min(800, len(df) * 35 + 50)
-    )
+    # Convert relevant date columns to datetime
+    date_cols = ["Proposed Start Date", "Proposed End Date"]
+    for col in date_cols:
+        if col in df_raw.columns:
+            df_raw[col] = pd.to_datetime(df_raw[col], errors='coerce')
 
-    # --- COE Status Explorer ---
-    unique_statuses = sorted(df["COE Status"].dropna().unique())
-    st.info(f"🔎 **Unique COE Statuses in your data:** {unique_statuses}")
-
+    # Select statuses
+    available_statuses = df_raw["COE Status"].dropna().unique().tolist()
     selected_statuses = st.multiselect(
         "Select COE Status(es) to include in analysis",
-        options=unique_statuses,
-        default=unique_statuses  # select all by default
+        options=available_statuses,
+        default=available_statuses
     )
 
-    analysis_type = st.selectbox("Choose Analysis Type", ["Active Students by Qualification"])
+    # Date reference (today)
+    ref_date = st.date_input(
+        "Reference date for analysis",
+        datetime.date.today()
+    )
 
-    if analysis_type == "Active Students by Qualification":
-        st.subheader("🎓 Active Students by Qualification")
-        ref_date = st.date_input("Select Date", datetime.today())
-        min_weeks = st.number_input("Show students with duration less than (weeks)", min_value=1, value=12)
+    st.markdown("## 📌 Sheet Preview")
+    st.dataframe(df_raw.head(50), use_container_width=True)
 
-        def filter_by_date(df_sub, mode):
-            date = pd.to_datetime(ref_date)
+    st.markdown("---")
 
-            df_filtered = df_sub[
-                df_sub["COE Status"].isin(selected_statuses) &
-                df_sub["Proposed Start Date"].notna() &
-                df_sub["Proposed End Date"].notna()
+    # Function to filter data
+    def filter_by_date(df_sub, mode):
+        date = pd.to_datetime(ref_date).normalize()
+        df_filtered = df_sub[
+            df_sub["COE Status"].isin(selected_statuses) &
+            df_sub["Proposed Start Date"].notna() &
+            df_sub["Proposed End Date"].notna()
+        ]
+
+        if mode == "Past":
+            return df_filtered[
+                (df_filtered["Proposed End Date"] < date)
+            ]
+        elif mode == "Future":
+            return df_filtered[
+                (df_filtered["Proposed Start Date"] > date)
+            ]
+        else:  # Today
+            return df_filtered[
+                (df_filtered["Proposed Start Date"] <= date) &
+                (df_filtered["Proposed End Date"] >= date) &
+                (df_filtered["Proposed Start Date"] <= date)  # explicitly exclude future start dates
             ]
 
-            if mode == "Past":
-                return df_filtered[
-                    (df_filtered["Proposed Start Date"] <= date) &
-                    (df_filtered["Proposed End Date"] >= date)
-                ]
-            elif mode == "Future":
-                return df_filtered[
-                    (df_filtered["Proposed Start Date"] > date)
-                ]
-            else:  # Today
-                return df_filtered[
-                    (df_filtered["Proposed Start Date"] <= date) &
-                    (df_filtered["Proposed End Date"] >= date)
-                ]
+    # Tabs for each view
+    tab_past, tab_today, tab_future = st.tabs(["⏪ Past Students", "🟢 Today Active Students", "⏩ Future Students"])
 
-        tabs = st.tabs(["📅 Active Today", "🕒 Past", "📆 Future"])
-        modes = ["Today", "Past", "Future"]
+    with tab_past:
+        past_df = filter_by_date(df_raw, "Past")
+        st.write(f"Past Students: {len(past_df)} records found")
+        st.dataframe(past_df, use_container_width=True)
 
-        for tab, mode in zip(tabs, modes):
-            with tab:
-                filtered = filter_by_date(df, mode)
-                filtered = filtered.drop_duplicates(subset=["COE Code"])
-                if "Duration In Weeks" in filtered.columns:
-                    filtered = filtered[pd.to_numeric(filtered["Duration In Weeks"], errors='coerce') < min_weeks]
+    with tab_today:
+        today_df = filter_by_date(df_raw, "Today")
+        st.write(f"Today Active Students: {len(today_df)} records found")
+        st.dataframe(today_df, use_container_width=True)
 
-                st.write(f"### {mode} Active Students: {len(filtered)} records found")
-                st.dataframe(filtered, use_container_width=True)
-                csv = filtered.to_csv(index=False).encode("utf-8")
-                st.download_button("Download CSV", csv, file_name=f"active_students_{mode.lower()}.csv", mime="text/csv")
+    with tab_future:
+        future_df = filter_by_date(df_raw, "Future")
+        st.write(f"Future Students: {len(future_df)} records found")
+        st.dataframe(future_df, use_container_width=True)
+
+else:
+    st.info("👆 Upload an Excel file above to begin analysis.")
