@@ -7,17 +7,32 @@ st.set_page_config(page_title="COE Student Analyzer", layout="wide")
 st.title("📘 COE Student Analyzer")
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
-# Fields to keep
-columns_required = [
-    "COE CODE", "COE STATUS", "FIRST NAME", "SECOND NAME", "FAMILY NAME",
-    "COURSE CODE", "COURSE NAME", "DURATION IN WEEKS",
-    "Proposed Start Date", "Proposed End Date", "Provider Student ID"
-]
+# Required column aliases
+expected_columns = {
+    "COE CODE": "COE CODE",
+    "COE STATUS": "COE STATUS",
+    "FIRST NAME": "FIRST NAME",
+    "SECOND NAME": "SECOND NAME",
+    "FAMILY NAME": "FAMILY NAME",
+    "COURSE CODE": "COURSE CODE",
+    "COURSE NAME": "COURSE NAME",
+    "DURATION IN WEEKS": "DURATION IN WEEKS",
+    "PROPOSED START DATE": "Proposed Start Date",
+    "PROPOSED END DATE": "Proposed End Date",
+    "PROVIDER STUDENT ID": "Provider Student ID"
+}
+
+def normalize_columns(df):
+    df.columns = df.columns.str.strip().str.upper()
+    return df
+
+def rename_columns(df):
+    return df.rename(columns={k: expected_columns[k] for k in df.columns if k in expected_columns})
 
 def preprocess_data(df):
-    df = df.copy()
-    df.columns = df.columns.str.strip()  # Clean column names
-    df = df[[col for col in columns_required if col in df.columns]]  # Keep only required
+    df = normalize_columns(df)
+    df = rename_columns(df)
+    df = df[list(expected_columns.values())]  # Keep only required columns
 
     # Convert dates
     df["Proposed Start Date"] = pd.to_datetime(df["Proposed Start Date"], errors="coerce")
@@ -32,16 +47,13 @@ def detect_duplicates(df):
     dup_key = ["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME", "COURSE NAME"]
     df["Is Duplicate"] = df.duplicated(subset=dup_key, keep=False)
 
-    # Detect overlapping dates within same duplicate group
+    # Detect overlapping dates
     df["Date Overlap"] = False
     grouped = df[df["Is Duplicate"]].groupby(dup_key)
-
     for _, group in grouped:
         group = group.sort_values("Proposed Start Date")
         for i in range(len(group) - 1):
-            end_current = group.iloc[i]["Proposed End Date"]
-            start_next = group.iloc[i + 1]["Proposed Start Date"]
-            if end_current >= start_next:
+            if group.iloc[i]["Proposed End Date"] >= group.iloc[i + 1]["Proposed Start Date"]:
                 df.loc[group.index[i], "Date Overlap"] = True
                 df.loc[group.index[i + 1], "Date Overlap"] = True
     return df
@@ -57,12 +69,11 @@ def filter_by_date(df, mode, today):
 
 def style_duplicates(df):
     def highlight_row(row):
-        color = ''
         if row.get("Date Overlap", False):
-            color = 'background-color: lightcoral'
+            return ['background-color: lightcoral'] * len(row)
         elif row.get("Is Duplicate", False):
-            color = 'background-color: khaki'
-        return [color] * len(row)
+            return ['background-color: khaki'] * len(row)
+        return [''] * len(row)
     return df.style.apply(highlight_row, axis=1)
 
 if uploaded_file:
@@ -71,10 +82,9 @@ if uploaded_file:
         df = preprocess_data(df_raw)
         df = detect_duplicates(df)
 
-        st.success("✅ File processed successfully")
-
-        # Date for reference
         today = pd.to_datetime(datetime.date.today())
+
+        st.success("✅ File processed successfully")
 
         tab1, tab2, tab3 = st.tabs(["⏪ Past Students", "🟢 Today Active Students", "⏩ Future Students"])
 
@@ -94,6 +104,6 @@ if uploaded_file:
             st.dataframe(style_duplicates(df_future), use_container_width=True)
 
     except Exception as e:
-        st.error(f"❌ Error reading file: {e}")
+        st.error(f"❌ Error: {e}")
 else:
-    st.info("👆 Please upload an Excel file to begin.")
+    st.info("👆 Upload an Excel file to start analysis.")
