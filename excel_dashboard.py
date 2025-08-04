@@ -18,16 +18,16 @@ if uploaded_file:
 
     st.success("✅ File uploaded and cleaned successfully.")
     
-    # Clean up: remove completely empty columns
+    # Remove fully empty columns
     df_raw.dropna(axis=1, how='all', inplace=True)
 
-    # Convert relevant date columns to datetime
+    # Convert date columns
     date_cols = ["Proposed Start Date", "Proposed End Date"]
     for col in date_cols:
         if col in df_raw.columns:
             df_raw[col] = pd.to_datetime(df_raw[col], errors='coerce')
 
-    # Select statuses
+    # Status selection
     available_statuses = df_raw["COE Status"].dropna().unique().tolist()
     selected_statuses = st.multiselect(
         "Select COE Status(es) to include in analysis",
@@ -35,7 +35,7 @@ if uploaded_file:
         default=available_statuses
     )
 
-    # Date reference (today)
+    # Date reference
     ref_date = st.date_input(
         "Reference date for analysis",
         datetime.date.today()
@@ -46,31 +46,30 @@ if uploaded_file:
 
     st.markdown("---")
 
-    # Function to filter data
+    # Filter function
     def filter_by_date(df_sub, mode):
         date = pd.to_datetime(ref_date).normalize()
         df_filtered = df_sub[
             df_sub["COE Status"].isin(selected_statuses) &
-            df_sub["Proposed Start Date"].notna() &
-            df_sub["Proposed End Date"].notna()
+            df_sub["Proposed Start Date"].notna()
         ]
 
         if mode == "Past":
-            return df_filtered[
-                (df_filtered["Proposed End Date"] < date)
-            ]
-        elif mode == "Future":
-            return df_filtered[
-                (df_filtered["Proposed Start Date"] > date)
-            ]
-        else:  # Today
-            return df_filtered[
-                (df_filtered["Proposed Start Date"] <= date) &
-                (df_filtered["Proposed End Date"] >= date) &
-                (df_filtered["Proposed Start Date"] <= date)  # explicitly exclude future start dates
-            ]
+            return df_filtered[df_filtered["Proposed End Date"] < date]
 
-    # Tabs for each view
+        elif mode == "Future":
+            return df_filtered[df_filtered["Proposed Start Date"] > date]
+
+        else:  # Today: show all started on/before today
+            df_today = df_filtered[df_filtered["Proposed Start Date"] <= date]
+
+            # Mark duplicates based on Provider Student ID
+            if "Provider Student ID" in df_today.columns:
+                df_today = df_today.copy()
+                df_today["Is Duplicate"] = df_today.duplicated(subset="Provider Student ID", keep=False)
+            return df_today
+
+    # Tabs
     tab_past, tab_today, tab_future = st.tabs(["⏪ Past Students", "🟢 Today Active Students", "⏩ Future Students"])
 
     with tab_past:
@@ -80,8 +79,16 @@ if uploaded_file:
 
     with tab_today:
         today_df = filter_by_date(df_raw, "Today")
-        st.write(f"Today Active Students: {len(today_df)} records found")
-        st.dataframe(today_df, use_container_width=True)
+        st.write(f"Today Active Students (all students started on or before today): {len(today_df)} records found")
+
+        # Highlight duplicates if present
+        if "Is Duplicate" in today_df.columns:
+            st.dataframe(today_df.style.apply(
+                lambda row: ['background-color: yellow' if row['Is Duplicate'] else '' for _ in row],
+                axis=1
+            ), use_container_width=True)
+        else:
+            st.dataframe(today_df, use_container_width=True)
 
     with tab_future:
         future_df = filter_by_date(df_raw, "Future")
