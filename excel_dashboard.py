@@ -5,6 +5,16 @@ import datetime
 st.set_page_config(page_title="COE Student Analyzer", layout="wide")
 
 st.title("📘 COE Student Analyzer")
+
+# Launch button
+if 'launch' not in st.session_state:
+    st.session_state.launch = False
+
+if not st.session_state.launch:
+    if st.button("🔍 Launch COE Analyzer"):
+        st.session_state.launch = True
+    st.stop()
+
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
 # Define expected columns
