@@ -170,6 +170,11 @@ if uploaded_file:
 
         with tab7:
             contact_df = df[["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]].drop_duplicates()
+            if "Is Duplicate" in df.columns:
+                contact_df = pd.merge(contact_df, df[["Provider Student ID", "Is Duplicate"]], on="Provider Student ID", how="left")
+                contact_df["Duplicate Flag"] = contact_df["Is Duplicate"].apply(lambda x: "Yes" if x else "No")
+                contact_df.drop(columns=["Is Duplicate"], inplace=True)
+
             csv = contact_df.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download Contact Sheet CSV", csv, file_name="contact_sheet.csv", mime="text/csv")
 
