@@ -3,15 +3,13 @@ import pandas as pd
 import datetime
 
 st.set_page_config(page_title="COE Student Analyzer", layout="wide")
+st.title("📘 TEK4DAY Student Analyzer")
 
-st.title("\U0001F4D8 TEK4DAY Student Analyzer")
-
-# Launch button
 if 'launch' not in st.session_state:
     st.session_state.launch = False
 
 if not st.session_state.launch:
-    if st.button("\U0001F50D Launch COE Analyzer"):
+    if st.button("🔍 Launch COE Analyzer"):
         st.session_state.launch = True
     st.stop()
 
@@ -63,7 +61,7 @@ def style_duplicates(df):
         if row.get("Is Duplicate", False):
             return ['background-color: khaki'] * len(row)
         return [''] * len(row)
-
+    
     return df.style.apply(highlight_row, axis=1).format({
         "Proposed Start Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
         "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
@@ -75,16 +73,18 @@ def style_duplicates(df):
 def visa_expiry_tracker(df, days=30):
     if "Visa Expiry Date" not in df.columns:
         return pd.DataFrame()
-    future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(days, unit="d")
-    return df[(df["Visa Expiry Date"] >= pd.to_datetime(datetime.date.today())) & (df["Visa Expiry Date"] <= future_limit)]
+    today = pd.to_datetime(datetime.date.today())
+    future_limit = today + pd.to_timedelta(days, unit="d")
+    return df[(df["Visa Expiry Date"] >= today) & (df["Visa Expiry Date"] <= future_limit)]
 
 def coe_expiry_tracker(df, within_days=30):
-    future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(within_days, unit="d")
-    return df[(df["Proposed End Date"] >= pd.to_datetime(datetime.date.today())) & (df["Proposed End Date"] <= future_limit)]
+    today = pd.to_datetime(datetime.date.today())
+    future_limit = today + pd.to_timedelta(within_days, unit="d")
+    return df[(df["Proposed End Date"] >= today) & (df["Proposed End Date"] <= future_limit)]
 
 def course_duration_validator(df):
-    df["Actual Weeks"] = (df["Proposed End Date"] - df["Proposed Start Date"]).dt.days // 7
-    df["Duration Mismatch"] = df["Actual Weeks"] != df["DURATION IN WEEKS"]
+    df["Actual Weeks"] = ((df["Proposed End Date"] - df["Proposed Start Date"]).dt.days // 7).astype("Int64")
+    df["Duration Mismatch"] = df["DURATION IN WEEKS"].astype("Int64") != df["Actual Weeks"]
     return df[df["Duration Mismatch"]]
 
 def weekly_start_count(df):
@@ -112,15 +112,15 @@ if uploaded_file:
         today = pd.to_datetime(datetime.date.today())
 
         tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-            "\U0001F4C6 Students by Start Date Range", "\U0001F6C2 Visa Expiry Tracker",
-            "\U0001F4DD COE Expiry Tracker", "\u23F0 Course Duration Validator",
-            "\U0001F4C5 Weekly Starts", "\U0001F464 Agent Summary", "\U0001F4E5 Download Contact Sheet"
+            "📅 Students by Start Date Range", "🛂 Visa Expiry Tracker",
+            "📝 COE Expiry Tracker", "⏱️ Duration Mismatch",
+            "📆 Weekly Starts", "👤 Agent Summary", "📥 Download Contact Sheet"
         ])
 
         with tab1:
-            min_date = df["Proposed Start Date"].min()
-            max_date = df["Proposed Start Date"].max()
-            start_date, end_date = st.date_input("Select Proposed Start Date Range", [min_date, max_date])
+            min_date = df["Proposed Start Date"].min().date()
+            max_date = df["Proposed Start Date"].max().date()
+            start_date, end_date = st.date_input("Select Start Date Range", [min_date, max_date])
             filtered_df = df[
                 (df["COE STATUS"].isin(selected_statuses)) &
                 (df["Proposed Start Date"] >= pd.to_datetime(start_date)) &
@@ -164,6 +164,6 @@ if uploaded_file:
             st.download_button("Download Contact Sheet CSV", csv, file_name="contact_sheet.csv", mime="text/csv")
 
     except Exception as e:
-        st.error(f"\u274C Error: {e}")
+        st.error(f"❌ Error: {e}")
 else:
-    st.info("\ud83d\udc47 Upload an Excel file to begin analysis.")
+    st.info("👇 Upload an Excel file to begin analysis.")
