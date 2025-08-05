@@ -1,17 +1,25 @@
-# Excel Dashboard (Streamlit)
+# 📘 COE Student Analyzer
 
-A simple Streamlit app to upload and analyze Excel files with basic login.
+A Streamlit-based web application designed to help education providers and agents analyze Confirmation of Enrolment (COE) data for international students. Upload an Excel file and explore insights like visa expiry tracking, COE expiry, course duration mismatches, agent summaries, and more.
 
-## Features
-- Login with username/password
-- Upload Excel file (`.xlsx`, `.xls`)
-- Preview raw data
-- Summary statistics and missing value checks
-- Histogram & correlation heatmap
+---
 
-## Usage
-Deployed via [Streamlit Cloud](https://streamlit.io/cloud)
+## 🚀 Features
 
-Default logins:
-- admin / password123
-- user1 / excel2025
+- 📆 **Start Date Filter**: Filter students by proposed start date range.
+- 🛂 **Visa Expiry Tracker**: Identify students whose visas are expiring soon.
+- 📝 **COE Expiry Tracker**: Track students with COEs ending within a selected timeframe.
+- ⏰ **Duration Validator**: Detect mismatches between proposed course duration and actual dates.
+- 📅 **Weekly Start Count**: Visualize student starts by week.
+- 👤 **Agent Summary**: View student counts and active COEs per agent.
+- 📥 **Download Contacts**: Export student contact details as a CSV file.
+
+---
+
+## 📦 Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/your-username/coe-student-analyzer.git
+cd coe-student-analyzer
