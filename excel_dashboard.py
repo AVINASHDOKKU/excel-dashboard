@@ -3,7 +3,7 @@ import pandas as pd
 import datetime
 
 st.set_page_config(page_title="COE Student Analyzer", layout="wide")
-st.title("📘 TEK4DAY Student Analyzer")
+st.title("📘 COE Student Analyzer")
 
 if 'launch' not in st.session_state:
     st.session_state.launch = False
@@ -15,7 +15,6 @@ if not st.session_state.launch:
 
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
-# Define expected columns (uppercase for normalization)
 expected_columns = {
     "COE CODE": "COE CODE",
     "COE STATUS": "COE STATUS",
@@ -31,8 +30,6 @@ expected_columns = {
     "VISA EXPIRY DATE": "Visa Expiry Date",
     "AGENT": "AGENT"
 }
-
-# --- Utility Functions ---
 
 def normalize_columns(df):
     df.columns = df.columns.str.strip().str.upper()
@@ -57,18 +54,19 @@ def detect_duplicates_by_id(filtered_df):
     return filtered_df
 
 def style_dates_and_duplicates(df):
+    max_cells = 250000  # Safe limit
+    if df.size > max_cells:
+        st.warning("⚠️ Too many cells to style. Displaying without formatting.")
+        return df
     def highlight_row(row):
         if row.get("Is Duplicate", False):
             return ['background-color: khaki'] * len(row)
         return [''] * len(row)
-    
     return df.style.apply(highlight_row, axis=1).format({
         "Proposed Start Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
         "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
         "Visa Expiry Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
     })
-
-# --- Suggested Modules ---
 
 def visa_expiry_tracker(df, days=30):
     if "Visa Expiry Date" not in df.columns:
@@ -100,8 +98,6 @@ def agent_summary(df):
     else:
         return pd.DataFrame()
 
-# --- Main App Logic ---
-
 if uploaded_file:
     try:
         df_raw = pd.read_excel(uploaded_file)
@@ -128,31 +124,25 @@ if uploaded_file:
             ]
             filtered_df = detect_duplicates_by_id(filtered_df)
             st.write(f"{len(filtered_df)} students found in selected date range")
-            st.dataframe(style_dates_and_duplicates(filtered_df), use_container_width=True)
+            styled = style_dates_and_duplicates(filtered_df)
+            st.dataframe(styled, use_container_width=True)
 
         with tab2:
             visa_days = st.slider("Visa expiring in next X days", 7, 180, 30)
             df_visa = visa_expiry_tracker(df, visa_days)
             st.write(f"{len(df_visa)} students with visa expiring in {visa_days} days")
-            st.dataframe(df_visa.style.format({
-                "Visa Expiry Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
-            }), use_container_width=True)
+            st.dataframe(df_visa, use_container_width=True)
 
         with tab3:
             coe_days = st.slider("COE expiring in next X days", 7, 180, 30)
             df_coe = coe_expiry_tracker(df, coe_days)
             st.write(f"{len(df_coe)} students with COE expiring in {coe_days} days")
-            st.dataframe(df_coe.style.format({
-                "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
-            }), use_container_width=True)
+            st.dataframe(df_coe, use_container_width=True)
 
         with tab4:
             df_mismatch = course_duration_validator(df)
             st.write(f"{len(df_mismatch)} students with duration mismatch")
-            st.dataframe(df_mismatch.style.format({
-                "Proposed Start Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
-                "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
-            }), use_container_width=True)
+            st.dataframe(df_mismatch, use_container_width=True)
 
         with tab5:
             weekly_counts = weekly_start_count(df)
