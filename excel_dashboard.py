@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
-st.image("logo.png", width=120
+st.image("TEK4DAY.png", width=120
 st.set_page_config(page_title="COE Student Analyzer", layout="wide")
 st.title("📘 COE Student Analyzer")
 
