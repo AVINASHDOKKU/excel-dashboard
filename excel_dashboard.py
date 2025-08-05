@@ -15,7 +15,7 @@ if not st.session_state.launch:
 
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
-# Define expected columns
+# Define expected columns (uppercase for normalization)
 expected_columns = {
     "COE CODE": "COE CODE",
     "COE STATUS": "COE STATUS",
@@ -39,7 +39,7 @@ def normalize_columns(df):
     return df
 
 def rename_columns(df):
-    return df.rename(columns={k: expected_columns[k] for k in df.columns if k in expected_columns})
+    return df.rename(columns={col: expected_columns[col] for col in df.columns if col in expected_columns})
 
 def preprocess_data(df):
     df = normalize_columns(df)
@@ -74,11 +74,13 @@ def visa_expiry_tracker(df, days=30):
     if "Visa Expiry Date" not in df.columns:
         return pd.DataFrame()
     future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(days, unit="d")
-    return df[(df["Visa Expiry Date"] >= pd.to_datetime(datetime.date.today())) & (df["Visa Expiry Date"] <= future_limit)]
+    return df[(df["Visa Expiry Date"] >= pd.to_datetime(datetime.date.today())) & 
+              (df["Visa Expiry Date"] <= future_limit)]
 
 def coe_expiry_tracker(df, within_days=30):
     future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(within_days, unit="d")
-    return df[(df["Proposed End Date"] >= pd.to_datetime(datetime.date.today())) & (df["Proposed End Date"] <= future_limit)]
+    return df[(df["Proposed End Date"] >= pd.to_datetime(datetime.date.today())) & 
+              (df["Proposed End Date"] <= future_limit)]
 
 def course_duration_validator(df):
     df["Actual Weeks"] = (df["Proposed End Date"] - df["Proposed Start Date"]).dt.days // 7
@@ -118,7 +120,7 @@ if uploaded_file:
         with tab1:
             min_date = df["Proposed Start Date"].min()
             max_date = df["Proposed Start Date"].max()
-            start_date, end_date = st.date_input("Select Proposed Start Date Range", [min_date, max_date], format="DD/MM/YYYY")
+            start_date, end_date = st.date_input("Select Proposed Start Date Range", [min_date, max_date])
             filtered_df = df[
                 (df["COE STATUS"].isin(selected_statuses)) &
                 (df["Proposed Start Date"] >= pd.to_datetime(start_date)) &
