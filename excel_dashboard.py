@@ -3,13 +3,13 @@ import pandas as pd
 import datetime
 
 st.set_page_config(page_title="COE Student Analyzer", layout="wide")
-st.title("📘 COE Student Analyzer")
+st.title("\U0001F4D8 COE Student Analyzer")
 
 if 'launch' not in st.session_state:
     st.session_state.launch = False
 
 if not st.session_state.launch:
-    if st.button("🔍 Launch COE Analyzer"):
+    if st.button("\U0001F50D Launch COE Analyzer"):
         st.session_state.launch = True
     st.stop()
 
@@ -48,6 +48,7 @@ def preprocess_data(df):
     df["Proposed End Date"] = pd.to_datetime(df.get("Proposed End Date"), errors="coerce")
     if "Visa Expiry Date" in df.columns:
         df["Visa Expiry Date"] = pd.to_datetime(df.get("Visa Expiry Date"), errors="coerce")
+    df["DURATION IN WEEKS"] = pd.to_numeric(df.get("DURATION IN WEEKS"), errors="coerce")
     df.dropna(subset=["Proposed Start Date", "Proposed End Date"], inplace=True)
     return df
 
@@ -68,7 +69,7 @@ def style_duplicates(df):
         "Visa Expiry Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
     })
 
-# --- New Suggested Modules ---
+# --- Modules ---
 
 def visa_expiry_tracker(df, days=30):
     if "Visa Expiry Date" not in df.columns:
@@ -111,12 +112,11 @@ if uploaded_file:
         today = pd.to_datetime(datetime.date.today())
 
         tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-            "📆 Students by Start Date Range", "🛂 Visa Expiry Tracker",
-            "📝 COE Expiry Tracker", "⏰ Course Duration Validator",
-            "📅 Weekly Starts", "👤 Agent Summary", "📥 Download Contact Sheet"
+            "\U0001F4C6 Students by Start Date Range", "\U0001F6C2 Visa Expiry Tracker",
+            "\U0001F4DD COE Expiry Tracker", "⏰ Course Duration Validator",
+            "\U0001F4C5 Weekly Starts", "\U0001F464 Agent Summary", "\U0001F4E5 Download Contact Sheet"
         ])
 
-        # Students by Start Date Range
         with tab1:
             min_date = df["Proposed Start Date"].min()
             max_date = df["Proposed Start Date"].max()
@@ -130,7 +130,6 @@ if uploaded_file:
             st.write(f"{len(filtered_df)} students found")
             st.dataframe(style_duplicates(filtered_df), use_container_width=True)
 
-        # Visa Expiry Tracker
         with tab2:
             visa_days = st.slider("Visa expiring in next X days", 7, 180, 30)
             df_visa = visa_expiry_tracker(df, visa_days)
@@ -139,7 +138,6 @@ if uploaded_file:
                 "Visa Expiry Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
             }), use_container_width=True)
 
-        # COE Expiry Tracker
         with tab3:
             coe_days = st.slider("COE expiring in next X days", 7, 180, 30)
             df_coe = coe_expiry_tracker(df, coe_days)
@@ -148,7 +146,6 @@ if uploaded_file:
                 "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
             }), use_container_width=True)
 
-        # Course Duration Validator
         with tab4:
             df_mismatch = course_duration_validator(df)
             st.write(f"{len(df_mismatch)} students with duration mismatch")
@@ -157,12 +154,10 @@ if uploaded_file:
                 "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
             }), use_container_width=True)
 
-        # Weekly Starts
         with tab5:
             weekly_counts = weekly_start_count(df)
             st.bar_chart(weekly_counts, x="Start Week", y="Number of Starts")
 
-        # Agent Summary
         with tab6:
             df_agent = agent_summary(df)
             if not df_agent.empty:
@@ -170,13 +165,12 @@ if uploaded_file:
             else:
                 st.info("No agent column found in the uploaded file.")
 
-        # Contact Sheet
         with tab7:
             contact_df = df[["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]].drop_duplicates()
             csv = contact_df.to_csv(index=False).encode('utf-8')
             st.download_button("Download Contact Sheet CSV", csv, file_name="contact_sheet.csv", mime="text/csv")
 
     except Exception as e:
-        st.error(f"❌ Error: {e}")
+        st.error(f"\u274C Error: {e}")
 else:
-    st.info("👆 Upload an Excel file to begin analysis.")
+    st.info("\U0001F446 Upload an Excel file to begin analysis.")
