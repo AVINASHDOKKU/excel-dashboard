@@ -180,8 +180,3 @@ if uploaded_file:
             if "Is Duplicate" in df.columns:
                 contact_df = pd.merge(
                     contact_df,
-                    df[["Provider Student ID", "Is Duplicate"]],
-                    on="Provider Student ID",
-                    how="left"
-                )
-               
