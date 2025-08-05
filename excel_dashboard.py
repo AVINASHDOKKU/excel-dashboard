@@ -52,10 +52,10 @@ def rename_columns(df):
 def preprocess_data(df):
     df = normalize_columns(df)
     df = rename_columns(df)
-    df["Proposed Start Date"] = pd.to_datetime(df.get("Proposed Start Date"), errors="coerce")
-    df["Proposed End Date"] = pd.to_datetime(df.get("Proposed End Date"), errors="coerce")
+    df["Proposed Start Date"] = pd.to_datetime(df.get("Proposed Start Date"), errors="coerce", dayfirst=True)
+    df["Proposed End Date"] = pd.to_datetime(df.get("Proposed End Date"), errors="coerce", dayfirst=True)
     if "Visa Expiry Date" in df.columns:
-        df["Visa Expiry Date"] = pd.to_datetime(df.get("Visa Expiry Date"), errors="coerce")
+        df["Visa Expiry Date"] = pd.to_datetime(df.get("Visa Expiry Date"), errors="coerce", dayfirst=True)
     df.dropna(subset=["Proposed Start Date", "Proposed End Date"], inplace=True)
     return df
 
@@ -83,14 +83,14 @@ def style_dates_and_duplicates(df):
 def visa_expiry_tracker(df, days=30):
     if "Visa Expiry Date" not in df.columns:
         return pd.DataFrame()
-    future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(days, unit="d")
-    return df[(df["Visa Expiry Date"] >= pd.to_datetime(datetime.date.today())) & 
-              (df["Visa Expiry Date"] <= future_limit)]
+    today = pd.to_datetime(datetime.date.today())
+    future_limit = today + pd.to_timedelta(days, unit="d")
+    return df[(df["Visa Expiry Date"] >= today) & (df["Visa Expiry Date"] <= future_limit)]
 
 def coe_expiry_tracker(df, within_days=30):
-    future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(within_days, unit="d")
-    return df[(df["Proposed End Date"] >= pd.to_datetime(datetime.date.today())) & 
-              (df["Proposed End Date"] <= future_limit)]
+    today = pd.to_datetime(datetime.date.today())
+    future_limit = today + pd.to_timedelta(within_days, unit="d")
+    return df[(df["Proposed End Date"] >= today) & (df["Proposed End Date"] <= future_limit)]
 
 def course_duration_validator(df):
     df["Actual Weeks"] = (df["Proposed End Date"] - df["Proposed Start Date"]).dt.days // 7
@@ -129,11 +129,11 @@ if uploaded_file:
         with tab1:
             min_date = df["Proposed Start Date"].min()
             max_date = df["Proposed Start Date"].max()
-            start_date, end_date = st.date_input("📆 Select Proposed Start Date Range", [min_date, max_date])
+            start_date, end_date = st.date_input("📆 Select Proposed Start Date Range", [min_date, max_date], format="DD/MM/YYYY")
             filtered_df = df[
                 (df["COE STATUS"].isin(selected_statuses)) &
-                (df["Proposed Start Date"] >= pd.to_datetime(start_date)) &
-                (df["Proposed Start Date"] <= pd.to_datetime(end_date))
+                (df["Proposed Start Date"] >= pd.to_datetime(start_date, dayfirst=True)) &
+                (df["Proposed Start Date"] <= pd.to_datetime(end_date, dayfirst=True))
             ]
             filtered_df = detect_duplicates_by_id(filtered_df)
             st.write(f"🔎 {len(filtered_df)} students found in selected date range")
@@ -144,18 +144,25 @@ if uploaded_file:
             visa_days = st.slider("📆 Visa expiring in next X days", 7, 180, 30)
             df_visa = visa_expiry_tracker(df, visa_days)
             st.write(f"🛂 {len(df_visa)} students with visa expiring in {visa_days} days")
-            st.dataframe(df_visa, use_container_width=True)
+            st.dataframe(df_visa.style.format({
+                "Visa Expiry Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
+            }), use_container_width=True)
 
         with tab3:
             coe_days = st.slider("📆 COE expiring in next X days", 7, 180, 30)
             df_coe = coe_expiry_tracker(df, coe_days)
             st.write(f"📄 {len(df_coe)} students with COE expiring in {coe_days} days")
-            st.dataframe(df_coe, use_container_width=True)
+            st.dataframe(df_coe.style.format({
+                "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
+            }), use_container_width=True)
 
         with tab4:
             df_mismatch = course_duration_validator(df)
             st.write(f"⏳ {len(df_mismatch)} students with duration mismatch")
-            st.dataframe(df_mismatch, use_container_width=True)
+            st.dataframe(df_mismatch.style.format({
+                "Proposed Start Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
+                "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
+            }), use_container_width=True)
 
         with tab5:
             weekly_counts = weekly_start_count(df)
@@ -172,13 +179,4 @@ if uploaded_file:
             contact_df = df[["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]].drop_duplicates()
             if "Is Duplicate" in df.columns:
                 contact_df = pd.merge(contact_df, df[["Provider Student ID", "Is Duplicate"]], on="Provider Student ID", how="left")
-                contact_df["Duplicate Flag"] = contact_df["Is Duplicate"].apply(lambda x: "Yes" if x else "No")
-                contact_df.drop(columns=["Is Duplicate"], inplace=True)
-
-            csv = contact_df.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download Contact Sheet CSV", csv, file_name="contact_sheet.csv", mime="text/csv")
-
-    except Exception as e:
-        st.error(f"❌ Error: {e}")
-else:
-    st.info("📤 Upload an Excel file to begin analysis.")
+                contact_df["Duplicate Flag"] = contact_df["Is Duplicate"].apply(lambda x: "Yes" if x
