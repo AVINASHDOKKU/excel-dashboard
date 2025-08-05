@@ -52,8 +52,11 @@ def detect_duplicates_by_id(filtered_df):
     filtered_df["Is Duplicate"] = filtered_df.duplicated(subset=["Provider Student ID"], keep=False)
     return filtered_df
 
-def style_dates(df, columns):
-    return df.style.format({col: lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "" for col in columns})
+def format_dates(df, columns):
+    for col in columns:
+        if col in df.columns:
+            df[col] = df[col].dt.strftime('%d/%m/%Y')
+    return df
 
 def visa_expiry_tracker(df, days=30):
     if "Visa Expiry Date" not in df.columns:
@@ -105,24 +108,24 @@ if uploaded_file:
         st.subheader("🎯 Filtered Students")
         filtered_df = detect_duplicates_by_id(filtered_df)
         st.write(f"{len(filtered_df)} students found")
-        st.dataframe(style_dates(filtered_df, ["Proposed Start Date", "Proposed End Date", "Visa Expiry Date"]), use_container_width=True)
+        st.dataframe(format_dates(filtered_df.copy(), ["Proposed Start Date", "Proposed End Date", "Visa Expiry Date"]), use_container_width=True)
 
         st.subheader("🛂 Visa Expiry Tracker")
         visa_days = st.slider("Visa expiring in next X days", 7, 180, 30)
         df_visa = visa_expiry_tracker(df, visa_days)
         st.write(f"{len(df_visa)} students with visa expiring in {visa_days} days")
-        st.dataframe(style_dates(df_visa, ["Visa Expiry Date"]), use_container_width=True)
+        st.dataframe(format_dates(df_visa.copy(), ["Visa Expiry Date"]), use_container_width=True)
 
         st.subheader("📝 COE Expiry Tracker")
         coe_days = st.slider("COE expiring in next X days", 7, 180, 30)
         df_coe = coe_expiry_tracker(df, coe_days)
         st.write(f"{len(df_coe)} students with COE expiring in {coe_days} days")
-        st.dataframe(style_dates(df_coe, ["Proposed End Date"]), use_container_width=True)
+        st.dataframe(format_dates(df_coe.copy(), ["Proposed End Date"]), use_container_width=True)
 
         st.subheader("⚠️ Duration Mismatch")
         df_mismatch = course_duration_validator(df)
         st.write(f"{len(df_mismatch)} students with mismatch")
-        st.dataframe(style_dates(df_mismatch, ["Proposed Start Date", "Proposed End Date"]), use_container_width=True)
+        st.dataframe(format_dates(df_mismatch.copy(), ["Proposed Start Date", "Proposed End Date"]), use_container_width=True)
 
         st.subheader("📅 Weekly Starts")
         weekly_counts = weekly_start_count(df)
