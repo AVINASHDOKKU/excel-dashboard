@@ -3,7 +3,7 @@ import pandas as pd
 import datetime
 
 st.set_page_config(page_title="COE Student Analyzer", layout="wide")
-st.title("📘 COE Student Analyzer")
+st.title("📘 TEK4DAY Student Analyzer")
 
 if 'launch' not in st.session_state:
     st.session_state.launch = False
