@@ -178,5 +178,4 @@ if uploaded_file:
         with tab7:
             contact_df = df[["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]].drop_duplicates()
             if "Is Duplicate" in df.columns:
-                contact_df = pd.merge(contact_df, df[["Provider Student ID", "Is Duplicate"]], on="Provider Student ID", how="left")
-                contact_df["Duplicate Flag"] = contact_df["Is Duplicate"].apply(lambda x: "Yes" if x
+                contact_df = pd.merge(contact_df
