@@ -87,6 +87,12 @@ def agent_summary(df):
         ).reset_index()
     return pd.DataFrame()
 
+def apply_duplicate_color(df):
+    # Color duplicates for display
+    df = df.copy()
+    df["Highlight"] = df["Is Duplicate"].apply(lambda x: "background-color: yellow" if x else "")
+    return df
+
 if uploaded_file:
     try:
         df_raw = pd.read_excel(uploaded_file)
@@ -105,43 +111,65 @@ if uploaded_file:
             (df["Proposed Start Date"] <= pd.to_datetime(end_date))
         ]
 
-        st.subheader("🎯 Filtered Students")
         filtered_df = detect_duplicates_by_id(filtered_df)
-        st.write(f"{len(filtered_df)} students found")
-        st.dataframe(format_dates(filtered_df.copy(), ["Proposed Start Date", "Proposed End Date", "Visa Expiry Date"]), use_container_width=True)
+        formatted_filtered_df = format_dates(filtered_df.copy(), ["Proposed Start Date", "Proposed End Date", "Visa Expiry Date"])
 
-        st.subheader("🛂 Visa Expiry Tracker")
         visa_days = st.slider("Visa expiring in next X days", 7, 180, 30)
         df_visa = visa_expiry_tracker(df, visa_days)
-        st.write(f"{len(df_visa)} students with visa expiring in {visa_days} days")
-        st.dataframe(format_dates(df_visa.copy(), ["Visa Expiry Date"]), use_container_width=True)
+        formatted_visa_df = format_dates(df_visa.copy(), ["Visa Expiry Date"])
 
-        st.subheader("📝 COE Expiry Tracker")
         coe_days = st.slider("COE expiring in next X days", 7, 180, 30)
         df_coe = coe_expiry_tracker(df, coe_days)
-        st.write(f"{len(df_coe)} students with COE expiring in {coe_days} days")
-        st.dataframe(format_dates(df_coe.copy(), ["Proposed End Date"]), use_container_width=True)
+        formatted_coe_df = format_dates(df_coe.copy(), ["Proposed End Date"])
 
-        st.subheader("⚠️ Duration Mismatch")
         df_mismatch = course_duration_validator(df)
-        st.write(f"{len(df_mismatch)} students with mismatch")
-        st.dataframe(format_dates(df_mismatch.copy(), ["Proposed Start Date", "Proposed End Date"]), use_container_width=True)
+        formatted_mismatch_df = format_dates(df_mismatch.copy(), ["Proposed Start Date", "Proposed End Date"])
 
-        st.subheader("📅 Weekly Starts")
         weekly_counts = weekly_start_count(df)
-        st.bar_chart(weekly_counts, x="Start Week", y="Number of Starts")
-
-        st.subheader("👤 Agent Summary")
         df_agent = agent_summary(df)
-        if not df_agent.empty:
-            st.dataframe(df_agent, use_container_width=True)
-        else:
-            st.info("No agent column found.")
 
-        st.subheader("📥 Download Contact Sheet")
-        contact_df = df[["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]].drop_duplicates()
-        csv = contact_df.to_csv(index=False).encode('utf-8')
-        st.download_button("Download Contact Sheet CSV", csv, file_name="contact_sheet.csv", mime="text/csv")
+        tabs = st.tabs(["🎯 Filtered Students", "🛂 Visa Expiry", "📝 COE Expiry", "⚠️ Duration Mismatch", "📅 Weekly Starts", "👤 Agent Summary", "📥 Contact Sheet"])
+
+        with tabs[0]:
+            st.subheader("🎯 Filtered Students")
+            st.write(f"{len(filtered_df)} students found")
+            # Add color on duplicate rows
+            styled_df = formatted_filtered_df.style.apply(
+                lambda x: ['background-color: yellow' if val else '' for val in x["Is Duplicate"]], axis=1
+            )
+            st.dataframe(styled_df, use_container_width=True)
+
+        with tabs[1]:
+            st.subheader("🛂 Visa Expiry Tracker")
+            st.write(f"{len(formatted_visa_df)} students with visa expiring in {visa_days} days")
+            st.dataframe(formatted_visa_df, use_container_width=True)
+
+        with tabs[2]:
+            st.subheader("📝 COE Expiry Tracker")
+            st.write(f"{len(formatted_coe_df)} students with COE expiring in {coe_days} days")
+            st.dataframe(formatted_coe_df, use_container_width=True)
+
+        with tabs[3]:
+            st.subheader("⚠️ Duration Mismatch")
+            st.write(f"{len(formatted_mismatch_df)} students with mismatched durations")
+            st.dataframe(formatted_mismatch_df, use_container_width=True)
+
+        with tabs[4]:
+            st.subheader("📅 Weekly Start Count")
+            st.bar_chart(weekly_counts, x="Start Week", y="Number of Starts")
+
+        with tabs[5]:
+            st.subheader("👤 Agent Summary")
+            if not df_agent.empty:
+                st.dataframe(df_agent, use_container_width=True)
+            else:
+                st.info("No agent data available.")
+
+        with tabs[6]:
+            st.subheader("📥 Download Contact Sheet")
+            contact_df = df[["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]].drop_duplicates()
+            csv = contact_df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download CSV", csv, file_name="contact_sheet.csv", mime="text/csv")
 
     except Exception as e:
         st.error(f"❌ Error: {e}")
