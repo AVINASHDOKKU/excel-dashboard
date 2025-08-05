@@ -1,20 +1,30 @@
 import streamlit as st
 import pandas as pd
 import datetime
-st.image("LOGO.png", width=120
-st.set_page_config(page_title="COE Student Analyzer", layout="wide")
-st.title("📘 COE Student Analyzer")
 
+# --- Branding ---
+st.set_page_config(page_title="COE Student Analyzer", layout="wide")
+st.markdown("""
+<div style='text-align: center'>
+    <img src='TEK4DAY.PNG' width='120'>
+    <h2>COE Student Analyzer</h2>
+    <p><em>Powered by TEK4DAY</em></p>
+</div>
+""", unsafe_allow_html=True)
+
+# --- Launch Button ---
 if 'launch' not in st.session_state:
     st.session_state.launch = False
 
 if not st.session_state.launch:
-    if st.button("🔍 Launch COE Analyzer"):
+    if st.button("🚀 Launch Analyzer"):
         st.session_state.launch = True
     st.stop()
 
-uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
+# --- File Upload ---
+uploaded_file = st.file_uploader("📤 Upload your Excel file", type=["xlsx"])
 
+# --- Expected Columns ---
 expected_columns = {
     "COE CODE": "COE CODE",
     "COE STATUS": "COE STATUS",
@@ -31,6 +41,7 @@ expected_columns = {
     "AGENT": "AGENT"
 }
 
+# --- Utility Functions ---
 def normalize_columns(df):
     df.columns = df.columns.str.strip().str.upper()
     return df
@@ -54,7 +65,7 @@ def detect_duplicates_by_id(filtered_df):
     return filtered_df
 
 def style_dates_and_duplicates(df):
-    max_cells = 250000  # Safe limit
+    max_cells = 250000
     if df.size > max_cells:
         st.warning("⚠️ Too many cells to style. Displaying without formatting.")
         return df
@@ -68,6 +79,7 @@ def style_dates_and_duplicates(df):
         "Visa Expiry Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
     })
 
+# --- Analysis Modules ---
 def visa_expiry_tracker(df, days=30):
     if "Visa Expiry Date" not in df.columns:
         return pd.DataFrame()
@@ -98,50 +110,51 @@ def agent_summary(df):
     else:
         return pd.DataFrame()
 
+# --- Main App Logic ---
 if uploaded_file:
     try:
         df_raw = pd.read_excel(uploaded_file)
         df = preprocess_data(df_raw)
 
         all_statuses = df["COE STATUS"].dropna().unique().tolist()
-        selected_statuses = st.multiselect("Select COE Status to include", all_statuses, default=all_statuses)
+        selected_statuses = st.multiselect("🎯 Select COE Status to include", all_statuses, default=all_statuses)
 
         today = pd.to_datetime(datetime.date.today())
 
         tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-            "📆 Start Date Filter", "🛂 Visa Expiry", "📝 COE Expiry",
-            "⏰ Duration Check", "📅 Weekly Starts", "👤 Agent Summary", "📥 Download Contacts"
+            "📅 Start Date Filter", "🛂 Visa Expiry", "📄 COE Expiry",
+            "⏳ Duration Check", "📈 Weekly Starts", "🤝 Agent Summary", "📥 Download Contacts"
         ])
 
         with tab1:
             min_date = df["Proposed Start Date"].min()
             max_date = df["Proposed Start Date"].max()
-            start_date, end_date = st.date_input("Select Proposed Start Date Range", [min_date, max_date])
+            start_date, end_date = st.date_input("📆 Select Proposed Start Date Range", [min_date, max_date])
             filtered_df = df[
                 (df["COE STATUS"].isin(selected_statuses)) &
                 (df["Proposed Start Date"] >= pd.to_datetime(start_date)) &
                 (df["Proposed Start Date"] <= pd.to_datetime(end_date))
             ]
             filtered_df = detect_duplicates_by_id(filtered_df)
-            st.write(f"{len(filtered_df)} students found in selected date range")
+            st.write(f"🔎 {len(filtered_df)} students found in selected date range")
             styled = style_dates_and_duplicates(filtered_df)
             st.dataframe(styled, use_container_width=True)
 
         with tab2:
-            visa_days = st.slider("Visa expiring in next X days", 7, 180, 30)
+            visa_days = st.slider("📆 Visa expiring in next X days", 7, 180, 30)
             df_visa = visa_expiry_tracker(df, visa_days)
-            st.write(f"{len(df_visa)} students with visa expiring in {visa_days} days")
+            st.write(f"🛂 {len(df_visa)} students with visa expiring in {visa_days} days")
             st.dataframe(df_visa, use_container_width=True)
 
         with tab3:
-            coe_days = st.slider("COE expiring in next X days", 7, 180, 30)
+            coe_days = st.slider("📆 COE expiring in next X days", 7, 180, 30)
             df_coe = coe_expiry_tracker(df, coe_days)
-            st.write(f"{len(df_coe)} students with COE expiring in {coe_days} days")
+            st.write(f"📄 {len(df_coe)} students with COE expiring in {coe_days} days")
             st.dataframe(df_coe, use_container_width=True)
 
         with tab4:
             df_mismatch = course_duration_validator(df)
-            st.write(f"{len(df_mismatch)} students with duration mismatch")
+            st.write(f"⏳ {len(df_mismatch)} students with duration mismatch")
             st.dataframe(df_mismatch, use_container_width=True)
 
         with tab5:
@@ -153,14 +166,14 @@ if uploaded_file:
             if not df_agent.empty:
                 st.dataframe(df_agent, use_container_width=True)
             else:
-                st.info("No agent column found in the uploaded file.")
+                st.info("ℹ️ No agent column found in the uploaded file.")
 
         with tab7:
             contact_df = df[["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]].drop_duplicates()
             csv = contact_df.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Contact Sheet CSV", csv, file_name="contact_sheet.csv", mime="text/csv")
+            st.download_button("📥 Download Contact Sheet CSV", csv, file_name="contact_sheet.csv", mime="text/csv")
 
     except Exception as e:
         st.error(f"❌ Error: {e}")
 else:
-    st.info("👆 Upload an Excel file to begin analysis.")
+    st.info("📤 Upload an Excel file to begin analysis.")
