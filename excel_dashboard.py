@@ -38,7 +38,8 @@ expected_columns = {
     "PROPOSED END DATE": "Proposed End Date",
     "PROVIDER STUDENT ID": "Provider Student ID",
     "VISA EXPIRY DATE": "Visa Expiry Date",
-    "AGENT": "AGENT"
+    "AGENT": "AGENT",
+    "VISA NON GRANT STATUS": "Visa Non Grant Status"
 }
 
 # --- Utility Functions ---
@@ -58,7 +59,6 @@ def preprocess_data(df):
         df["Visa Expiry Date"] = pd.to_datetime(df.get("Visa Expiry Date"), errors="coerce")
     df.dropna(subset=["Proposed Start Date", "Proposed End Date"], inplace=True)
     return df
-
 def detect_duplicates_by_id(filtered_df):
     dup_key = ["Provider Student ID"]
     filtered_df["Is Duplicate"] = filtered_df.duplicated(subset=dup_key, keep=False)
@@ -140,17 +140,27 @@ if uploaded_file:
         with tab2:
             statuses = df["COE STATUS"].dropna().unique().tolist()
             selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab2")
+            df_filtered = df[df["COE STATUS"].isin(selected_statuses)]
+
+            st.subheader("🗓️ Visa Expiring in Next X Days")
             visa_days = st.slider("📆 Visa expiring in next X days", 7, 180, 30)
-            df_visa = visa_expiry_tracker(df[df["COE STATUS"].isin(selected_statuses)], visa_days)
-            st.write(f"🛂 {len(df_visa)} students with visa expiring in {visa_days} days")
-            st.dataframe(df_visa, use_container_width=True)
+            df_visa_expiring = visa_expiry_tracker(df_filtered, visa_days)
+            st.write(f"🛂 {len(df_visa_expiring)} students with visa expiring in {visa_days} days")
+            st.dataframe(df_visa_expiring, use_container_width=True)
+
+            st.subheader("❌ Visa Refused Students")
+            if "Visa Non Grant Status" in df.columns:
+                df_visa_refused = df_filtered[df_filtered["Visa Non Grant Status"].str.lower() == "refused"]
+                st.write(f"❌ {len(df_visa_refused)} students with refused visa status")
+                st.dataframe(df_visa_refused, use_container_width=True)
+            else:
+                st.info("ℹ️ 'Visa Non Grant Status' column not found in the uploaded file.")
 
         with tab3:
             statuses = df["COE STATUS"].dropna().unique().tolist()
             selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab3")
-            coe_days = st.slider("📆 COE expiring in next X days", 7, 180, 30)
-            df_coe = coe_expiry_tracker(df[df["COE STATUS"].isin(selected_statuses)], coe_days)
-            st.write(f"📄 {len(df_coe)} students with COE expiring in {coe_days} days")
+            df_coe = coe_expiry_tracker(df[df["COE STATUS"].isin(selected_statuses)])
+            st.write(f"📄 {len(df_coe)} students with COE expiring in next 30 days")
             st.dataframe(df_coe, use_container_width=True)
 
         with tab4:
