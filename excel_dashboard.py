@@ -2,14 +2,28 @@ import streamlit as st
 import pandas as pd
 import datetime
 
+# Page config
 st.set_page_config(page_title="COE Student Analyzer", layout="wide")
-st.markdown("""
-<div style='text-align: center'>
-    <h2>COE Student Analyzer</h2>
-    <p><em>Powered by TEK4DAY</em></p>
-</div>
-""", unsafe_allow_html=True)
 
+# Logo and header
+logo_url = "https://github.com/AVINASHDOKKU/excel-dashboard/blob/main/TEK4DAY.png?raw=true"
+st.markdown(
+    f"""
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h2>COE Student Analyzer</h2>
+            <p><em>Powered by TEK4DAY</em></p>
+        </div>
+        <div>
+            <img src="{logo_url}" width="120">
+        </div>
+    </div>
+    <hr>
+    """,
+    unsafe_allow_html=True
+)
+
+# Launch control
 if 'launch' not in st.session_state:
     st.session_state.launch = False
 
@@ -18,8 +32,10 @@ if not st.session_state.launch:
         st.session_state.launch = True
     st.stop()
 
+# File uploader
 uploaded_file = st.file_uploader("📤 Upload your Excel file", type=["xlsx"])
 
+# Expected columns
 expected_columns = {
     "COE CODE": "COE CODE",
     "COE STATUS": "COE STATUS",
@@ -37,6 +53,7 @@ expected_columns = {
     "AGENT": "AGENT"
 }
 
+# Helper functions
 def normalize_columns(df):
     df.columns = df.columns.str.strip().str.upper()
     return df
@@ -83,7 +100,7 @@ def visa_expiry_tracker(df, days=30):
 
 def coe_expiry_tracker(df, within_days=30):
     future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(within_days, unit="d")
-    return df[(df["Proposed End Date"] >= pd.to_datetime(datetime.date.today())) & 
+    return df[(df["Proposed End Date"] >= pd.to_datetime(datetime.date.today())) &
               (df["Proposed End Date"] <= future_limit)]
 
 def course_duration_validator(df):
@@ -192,4 +209,4 @@ if uploaded_file:
     except Exception as e:
         st.error(f"❌ Error: {e}")
 else:
-    st.info("📤 Upload an Excel file to begin analysis.")
+    st.info("📤 Upload an Excel file to begin")
