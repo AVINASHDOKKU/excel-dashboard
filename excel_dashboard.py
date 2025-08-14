@@ -116,17 +116,14 @@ if uploaded_file:
         df_raw = pd.read_excel(uploaded_file)
         df = preprocess_data(df_raw)
 
-        all_statuses = df["COE STATUS"].dropna().unique().tolist()
-        selected_statuses = st.multiselect("🎯 Select COE Status to include", all_statuses, default=all_statuses)
-
-        today = pd.to_datetime(datetime.date.today())
-
         tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
             "📅 Start Date Filter", "🛂 Visa Expiry", "📄 COE Expiry",
             "⏳ Duration Check", "📈 Weekly Starts", "🤝 Agent Summary", "📥 Download Contacts"
         ])
 
         with tab1:
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab1")
             min_date = df["Proposed Start Date"].min()
             max_date = df["Proposed Start Date"].max()
             start_date, end_date = st.date_input("📆 Select Proposed Start Date Range", [min_date, max_date])
@@ -141,35 +138,47 @@ if uploaded_file:
             st.dataframe(styled, use_container_width=True)
 
         with tab2:
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab2")
             visa_days = st.slider("📆 Visa expiring in next X days", 7, 180, 30)
-            df_visa = visa_expiry_tracker(df, visa_days)
+            df_visa = visa_expiry_tracker(df[df["COE STATUS"].isin(selected_statuses)], visa_days)
             st.write(f"🛂 {len(df_visa)} students with visa expiring in {visa_days} days")
             st.dataframe(df_visa, use_container_width=True)
 
         with tab3:
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab3")
             coe_days = st.slider("📆 COE expiring in next X days", 7, 180, 30)
-            df_coe = coe_expiry_tracker(df, coe_days)
+            df_coe = coe_expiry_tracker(df[df["COE STATUS"].isin(selected_statuses)], coe_days)
             st.write(f"📄 {len(df_coe)} students with COE expiring in {coe_days} days")
             st.dataframe(df_coe, use_container_width=True)
 
         with tab4:
-            df_mismatch = course_duration_validator(df)
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab4")
+            df_mismatch = course_duration_validator(df[df["COE STATUS"].isin(selected_statuses)])
             st.write(f"⏳ {len(df_mismatch)} students with duration mismatch")
             st.dataframe(df_mismatch, use_container_width=True)
 
         with tab5:
-            weekly_counts = weekly_start_count(df)
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab5")
+            weekly_counts = weekly_start_count(df[df["COE STATUS"].isin(selected_statuses)])
             st.bar_chart(weekly_counts, x="Start Week", y="Number of Starts")
 
         with tab6:
-            df_agent = agent_summary(df)
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab6")
+            df_agent = agent_summary(df[df["COE STATUS"].isin(selected_statuses)])
             if not df_agent.empty:
                 st.dataframe(df_agent, use_container_width=True)
             else:
                 st.info("ℹ️ No agent column found in the uploaded file.")
 
         with tab7:
-            contact_df = df[["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]].drop_duplicates()
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab7")
+            contact_df = df[df["COE STATUS"].isin(selected_statuses)][["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]].drop_duplicates()
             if "Is Duplicate" in df.columns:
                 contact_df = pd.merge(contact_df, df[["Provider Student ID", "Is Duplicate"]], on="Provider Student ID", how="left")
                 contact_df["Duplicate Flag"] = contact_df["Is Duplicate"].apply(lambda x: "Yes" if x else "No")
