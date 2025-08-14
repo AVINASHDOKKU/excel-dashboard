@@ -5,7 +5,7 @@ import datetime
 # Page config
 st.set_page_config(page_title="COE Student Analyzer", layout="wide")
 
-# Logo and header
+# Logo and header (256x256 px)
 logo_url = "https://github.com/AVINASHDOKKU/excel-dashboard/blob/main/TEK4DAY.png?raw=true"
 st.markdown(
     f"""
@@ -15,7 +15,7 @@ st.markdown(
             <p><em>Powered by TEK4DAY</em></p>
         </div>
         <div>
-            <img src="{logo_url}" width="120">
+            <img src="{logo_url}" width="256">
         </div>
     </div>
     <hr>
@@ -159,7 +159,7 @@ if uploaded_file:
 
             st.subheader("❌ Visa Refused Students")
             if "Visa Non Grant Status" in df_filtered.columns:
-                df_visa_refused = df_filtered[df_filtered["Visa Non Grant Status"].str.lower() == "refused"]
+                df_visa_refused = df_filtered[df_filtered["Visa Non Grant Status"].astype(str).str.lower() == "refused"]
                 st.write(f"❌ {len(df_visa_refused)} students with refused visa status")
                 st.dataframe(df_visa_refused, use_container_width=True)
             else:
