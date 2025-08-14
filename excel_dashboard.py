@@ -1,267 +1,195 @@
-# ==============================
-# COE Student Analyzer - Part 1
-# ==============================
-
 import streamlit as st
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
+import datetime
 
-# ------------------------------
-# Default App Settings (can be changed in Settings tab)
-# ------------------------------
-if "app_icon" not in st.session_state:
-    st.session_state.app_icon = "🎓"
-if "app_title" not in st.session_state:
-    st.session_state.app_title = "COE Student Analyzer"
+st.set_page_config(page_title="COE Student Analyzer", layout="wide")
+st.markdown("""
+<div style='text-align: center'>
+    <h2>COE Student Analyzer</h2>
+    <p><em>Powered by TEK4DAY</em></p>
+</div>
+""", unsafe_allow_html=True)
 
-# Apply page config
-st.set_page_config(
-    page_title=st.session_state.app_title,
-    page_icon=st.session_state.app_icon,
-    layout="wide"
-)
+if 'launch' not in st.session_state:
+    st.session_state.launch = False
 
-# ------------------------------
-# File uploader
-# ------------------------------
-st.title(f"{st.session_state.app_icon} {st.session_state.app_title}")
-uploaded_file = st.file_uploader("📂 Upload your Excel file", type=["xlsx"])
+if not st.session_state.launch:
+    if st.button("🚀 Launch Analyzer"):
+        st.session_state.launch = True
+    st.stop()
 
-# ------------------------------
-# Required Columns
-# ------------------------------
-REQUIRED_COLUMNS = [
-    'COE STATUS', 'FIRST NAME', 'SECOND NAME', 'FAMILY NAME', 
-    'STUDENT ID', 'PROVIDER STUDENT ID', 'COURSE NAME',
-    'DURATION IN WEEKS', 'PROPOSED START DATE', 'PROPOSED END DATE'
-]
+uploaded_file = st.file_uploader("📤 Upload your Excel file", type=["xlsx"])
 
-def validate_columns(df):
-    missing_cols = [col for col in REQUIRED_COLUMNS if col not in df.columns]
-    if missing_cols:
-        st.error(f"❌ Missing one or more required columns: {missing_cols}")
-        return False
-    return True
-# ==============================
-# COE Student Analyzer - Part 2
-# ==============================
+expected_columns = {
+    "COE CODE": "COE CODE",
+    "COE STATUS": "COE STATUS",
+    "FIRST NAME": "FIRST NAME",
+    "SECOND NAME": "SECOND NAME",
+    "FAMILY NAME": "FAMILY NAME",
+    "COURSE CODE": "COURSE CODE",
+    "COURSE NAME": "COURSE NAME",
+    "DURATION IN WEEKS": "DURATION IN WEEKS",
+    "PROPOSED START DATE": "Proposed Start Date",
+    "PROPOSED END DATE": "Proposed End Date",
+    "PROVIDER STUDENT ID": "Provider Student ID",
+    "VISA END DATE": "Visa End Date",
+    "VISA NON GRANT STATUS": "Visa Non Grant Status",
+    "AGENT": "AGENT"
+}
 
-def load_and_prepare_data(file):
-    """Load Excel, convert dates to dd/mm/yyyy, and validate."""
-    try:
-        df = pd.read_excel(file)
-    except Exception as e:
-        st.error(f"❌ Error reading file: {e}")
-        return None
-
-    if not validate_columns(df):
-        return None
-
-    # Convert dates to datetime
-    for col in ['PROPOSED START DATE', 'PROPOSED END DATE']:
-        df[col] = pd.to_datetime(df[col], errors='coerce')
-
+def normalize_columns(df):
+    df.columns = df.columns.str.strip().str.upper()
     return df
 
+def rename_columns(df):
+    return df.rename(columns={col: expected_columns[col] for col in df.columns if col in expected_columns})
 
-def style_duplicates(filtered_df):
-    """Highlight duplicate PROVIDER STUDENT ID in filtered data only."""
-    if 'PROVIDER STUDENT ID' not in filtered_df.columns:
-        return filtered_df  # Fail-safe
+def preprocess_data(df):
+    df = normalize_columns(df)
+    df = rename_columns(df)
+    df["Proposed Start Date"] = pd.to_datetime(df.get("Proposed Start Date"), errors="coerce")
+    df["Proposed End Date"] = pd.to_datetime(df.get("Proposed End Date"), errors="coerce")
+    if "Visa End Date" in df.columns:
+        df["Visa End Date"] = pd.to_datetime(df.get("Visa End Date"), errors="coerce")
+    df.dropna(subset=["Proposed Start Date", "Proposed End Date"], inplace=True)
+    return df
 
-    # Find duplicates in the filtered dataset only
-    duplicates = filtered_df['PROVIDER STUDENT ID'].duplicated(keep=False)
+def detect_duplicates_by_id(filtered_df):
+    dup_key = ["Provider Student ID"]
+    filtered_df["Is Duplicate"] = filtered_df.duplicated(subset=dup_key, keep=False)
+    return filtered_df
 
+def style_dates_and_duplicates(df):
+    max_cells = 250000
+    if df.size > max_cells:
+        st.warning("⚠️ Too many cells to style. Displaying without formatting.")
+        return df
     def highlight_row(row):
-        if duplicates.loc[row.name]:
-            return ['background-color: lightyellow'] * len(row)
+        if row.get("Is Duplicate", False):
+            return ['background-color: khaki'] * len(row)
         return [''] * len(row)
+    return df.style.apply(highlight_row, axis=1).format({
+        "Proposed Start Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
+        "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
+        "Visa End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
+    })
 
-    return filtered_df.style.apply(highlight_row, axis=1)
+def visa_expiry_tracker(df, days=30):
+    if "Visa End Date" not in df.columns:
+        return pd.DataFrame()
+    today = pd.to_datetime(datetime.date.today())
+    future_limit = today + pd.to_timedelta(days, unit="d")
+    return df[(df["Visa End Date"] >= today) & (df["Visa End Date"] <= future_limit)]
 
+def coe_expiry_tracker(df, within_days=30):
+    future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(within_days, unit="d")
+    return df[(df["Proposed End Date"] >= pd.to_datetime(datetime.date.today())) & 
+              (df["Proposed End Date"] <= future_limit)]
 
-# ------------------------------
-# Main logic - Load file
-# ------------------------------
-if uploaded_file:
-    df = load_and_prepare_data(uploaded_file)
+def course_duration_validator(df):
+    df["Actual Weeks"] = (df["Proposed End Date"] - df["Proposed Start Date"]).dt.days // 7
+    df["Duration Mismatch"] = df["Actual Weeks"] != df["DURATION IN WEEKS"]
+    return df[df["Duration Mismatch"]]
 
-    if df is not None:
-        # Date filter (dd/mm/yyyy)
-        st.subheader("📅 Filter by Proposed Start Date")
-        min_date = df['PROPOSED START DATE'].min()
-        max_date = df['PROPOSED START DATE'].max()
+def weekly_start_count(df):
+    df["Start Week"] = df["Proposed Start Date"].dt.isocalendar().week
+    return df.groupby("Start Week")["Provider Student ID"].count().reset_index(name="Number of Starts")
 
-        start_date, end_date = st.date_input(
-            "Select Proposed Start Date Range (dd/mm/yyyy)",
-            value=[min_date, max_date],
-            min_value=min_date,
-            max_value=max_date,
-            format="DD/MM/YYYY"
-        )
-
-        # Filter data
-        mask = (df['PROPOSED START DATE'] >= pd.to_datetime(start_date)) & \
-               (df['PROPOSED START DATE'] <= pd.to_datetime(end_date))
-        filtered_df = df.loc[mask]
-
-        st.success(f"🔍 {len(filtered_df)} records found between {start_date.strftime('%d/%m/%Y')} and {end_date.strftime('%d/%m/%Y')}")
-
-        # Show styled dataframe (highlight duplicates in filtered data only)
-        pd.set_option("styler.render.max_elements", len(filtered_df) * len(filtered_df.columns))
-        st.dataframe(style_duplicates(filtered_df), use_container_width=True)
-# ==============================
-# COE Student Analyzer - Part 3
-# ==============================
-import datetime as dt
-
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-    "📅 Date Filter",
-    "🛂 Visa Expiry",
-    "📄 COE Expiry",
-    "📏 Duration Validator",
-    "📆 Weekly Starts",
-    "📇 Contact Sheet",
-    "⚙ Settings"
-])
-
-# -------- TAB 1: Date Filter --------
-with tab1:
-    st.subheader("📅 Filter by Proposed Start Date")
-    min_date = df['PROPOSED START DATE'].min()
-    max_date = df['PROPOSED START DATE'].max()
-
-    start_date, end_date = st.date_input(
-        "Select Proposed Start Date Range",
-        value=[min_date, max_date],
-        min_value=min_date,
-        max_value=max_date,
-        format="DD/MM/YYYY"
-    )
-    mask = (df['PROPOSED START DATE'] >= pd.to_datetime(start_date)) & \
-           (df['PROPOSED START DATE'] <= pd.to_datetime(end_date))
-    filtered_df = df.loc[mask]
-
-    pd.set_option("styler.render.max_elements", len(filtered_df) * len(filtered_df.columns))
-    st.dataframe(style_duplicates(filtered_df), use_container_width=True)
-
-# -------- TAB 2: Visa Expiry --------
-with tab2:
-    st.subheader("🛂 Visa Expiry Tracker")
-    days_notice = st.slider("Show students whose visa expires within X days", 0, 365, 90)
-    today = pd.to_datetime(dt.date.today())
-    if 'VISA EXPIRY DATE' in df.columns:
-        mask = (df['VISA EXPIRY DATE'] - today).dt.days <= days_notice
-        visa_df = df.loc[mask]
-        st.dataframe(visa_df, use_container_width=True)
+def agent_summary(df):
+    if "AGENT" in df.columns:
+        return df.groupby("AGENT").agg(
+            Total_Students=("Provider Student ID", "count"),
+            Active_Students=("COE STATUS", lambda x: (x == "Active").sum())
+        ).reset_index()
     else:
-        st.warning("⚠ No 'VISA EXPIRY DATE' column found.")
-
-# -------- TAB 3: COE Expiry --------
-with tab3:
-    st.subheader("📄 COE Expiry Tracker")
-    days_notice = st.slider("Show students whose COE expires within X days", 0, 365, 60)
-    if 'COE END DATE' in df.columns:
-        mask = (df['COE END DATE'] - today).dt.days <= days_notice
-        coe_df = df.loc[mask]
-        st.dataframe(coe_df, use_container_width=True)
-    else:
-        st.warning("⚠ No 'COE END DATE' column found.")
-
-# -------- TAB 4: Duration Validator --------
-with tab4:
-    st.subheader("📏 Course Duration Validator")
-    df['CALCULATED_DURATION'] = (df['PROPOSED END DATE'] - df['PROPOSED START DATE']).dt.days / 7
-    duration_df = df[df['CALCULATED_DURATION'] != df['DURATION IN WEEKS']]
-    st.dataframe(duration_df, use_container_width=True)
-
-# -------- TAB 5: Weekly Starts --------
-with tab5:
-    st.subheader("📆 Weekly Start Count")
-    weekly_count = df.groupby(df['PROPOSED START DATE'].dt.to_period('W')).size().reset_index(name='Count')
-    weekly_count['PROPOSED START DATE'] = weekly_count['PROPOSED START DATE'].astype(str)
-    st.bar_chart(weekly_count.set_index('PROPOSED START DATE')['Count'])
-
-# -------- TAB 6: Contact Sheet --------
-with tab6:
-    st.subheader("📇 Student Contact Sheet")
-    if st.button("📥 Download Contact Sheet as CSV"):
-        contact_df = df[['FIRST NAME', 'SECOND NAME', 'FAMILY NAME', 'STUDENT ID', 'PROVIDER STUDENT ID']]
-        csv = contact_df.to_csv(index=False).encode('utf-8')
-        st.download_button(label="Download CSV", data=csv, file_name="contact_sheet.csv", mime="text/csv")
-
-# -------- TAB 7: Settings --------
-with tab7:
-    st.subheader("⚙ App Settings")
-    app_icon = st.text_input("Change App Icon (Emoji)", value="🎓")
-    app_title = st.text_input("Change App Title", value="COE Student Analyzer")
-    if st.button("Apply Settings"):
-        st.session_state['app_icon'] = app_icon
-        st.session_state['app_title'] = app_title
-        st.success("✅ Settings saved! Please reload the page to apply changes.")
-# ==============================
-# COE Student Analyzer - Part 4
-# ==============================
-import streamlit as st
-import pandas as pd
-import datetime as dt
-
-# Initialize Session State Defaults
-if 'app_icon' not in st.session_state:
-    st.session_state['app_icon'] = "🎓"
-if 'app_title' not in st.session_state:
-    st.session_state['app_title'] = "COE Student Analyzer"
-
-# UI Header
-st.markdown(
-    f"""
-    <div style="text-align: center; padding: 10px;">
-        <span style="font-size: 50px;">{st.session_state['app_icon']}</span>
-        <h1 style="margin-bottom: 0;">{st.session_state['app_title']}</h1>
-        <p style="color: grey;">Analyze and track COE student data effortlessly</p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-# File Uploader
-uploaded_file = st.file_uploader("📂 Upload COE Student Data (Excel)", type=["xlsx"])
-
+        return pd.DataFrame()
 if uploaded_file:
     try:
-        df = pd.read_excel(uploaded_file, dayfirst=True)
+        df_raw = pd.read_excel(uploaded_file)
+        df = preprocess_data(df_raw)
 
-        # Ensure required columns exist
-        required_columns = [
-            'COE STATUS', 'FIRST NAME', 'SECOND NAME', 'FAMILY NAME',
-            'STUDENT ID', 'PROVIDER STUDENT ID', 'COURSE NAME',
-            'DURATION IN WEEKS', 'PROPOSED START DATE', 'PROPOSED END DATE'
-        ]
-        missing = [col for col in required_columns if col not in df.columns]
-        if missing:
-            st.error(f"❌ Error: Missing one or more required columns: {missing}")
-            st.stop()
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+            "📅 Start Date Filter", "🛂 Visa Expiry", "📄 COE Expiry",
+            "⏳ Duration Check", "📈 Weekly Starts", "🤝 Agent Summary", "📥 Download Contacts"
+        ])
 
-        # Convert date columns
-        date_columns = ['PROPOSED START DATE', 'PROPOSED END DATE', 'VISA EXPIRY DATE', 'COE END DATE']
-        for col in date_columns:
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
+        with tab1:
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab1")
+            min_date = df["Proposed Start Date"].min()
+            max_date = df["Proposed Start Date"].max()
+            start_date, end_date = st.date_input("📆 Select Proposed Start Date Range", [min_date, max_date])
+            filtered_df = df[
+                (df["COE STATUS"].isin(selected_statuses)) &
+                (df["Proposed Start Date"] >= pd.to_datetime(start_date)) &
+                (df["Proposed Start Date"] <= pd.to_datetime(end_date))
+            ]
+            filtered_df = detect_duplicates_by_id(filtered_df)
+            st.write(f"🔎 {len(filtered_df)} students found in selected date range")
+            styled = style_dates_and_duplicates(filtered_df)
+            st.dataframe(styled, use_container_width=True)
 
-        # Style function for duplicates
-        def style_duplicates(dataframe):
-            duplicate_mask = dataframe.duplicated(subset=['STUDENT ID'], keep=False)
-            return dataframe.style.apply(
-                lambda x: ['background-color: yellow' if duplicate_mask.iloc[i] else '' for i in range(len(x))],
-                axis=0
-            )
+        with tab2:
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab2")
+            df_filtered = df[df["COE STATUS"].isin(selected_statuses)]
 
-        # 🎯 Launcher Button
-        if st.button("🚀 Launch COE Analyzer"):
-            st.success("✅ Analyzer launched! Use the tabs below to explore data.")
+            st.subheader("🗓️ Visa Expiring in Next X Days")
+            visa_days = st.slider("📆 Visa expiring in next X days", 7, 180, 30)
+            df_visa_expiring = visa_expiry_tracker(df_filtered, visa_days)
+            st.write(f"🛂 {len(df_visa_expiring)} students with visa expiring in {visa_days} days")
+            st.dataframe(df_visa_expiring, use_container_width=True)
+
+            st.subheader("❌ Visa Refused Students")
+            if "Visa Non Grant Status" in df.columns:
+                df_visa_refused = df_filtered[df_filtered["Visa Non Grant Status"].str.lower() == "refused"]
+                st.write(f"❌ {len(df_visa_refused)} students with refused visa status")
+                st.dataframe(df_visa_refused, use_container_width=True)
+            else:
+                st.info("ℹ️ 'Visa Non Grant Status' column not found in the uploaded file.")
+
+        with tab3:
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab3")
+            df_coe = coe_expiry_tracker(df[df["COE STATUS"].isin(selected_statuses)])
+            st.write(f"📄 {len(df_coe)} students with COE expiring in next 30 days")
+            st.dataframe(df_coe, use_container_width=True)
+
+        with tab4:
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab4")
+            df_mismatch = course_duration_validator(df[df["COE STATUS"].isin(selected_statuses)])
+            st.write(f"⏳ {len(df_mismatch)} students with duration mismatch")
+            st.dataframe(df_mismatch, use_container_width=True)
+
+        with tab5:
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab5")
+            weekly_counts = weekly_start_count(df[df["COE STATUS"].isin(selected_statuses)])
+            st.bar_chart(weekly_counts, x="Start Week", y="Number of Starts")
+
+        with tab6:
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab6")
+            df_agent = agent_summary(df[df["COE STATUS"].isin(selected_statuses)])
+            if not df_agent.empty:
+                st.dataframe(df_agent, use_container_width=True)
+            else:
+                st.info("ℹ️ No agent column found in the uploaded file.")
+
+        with tab7:
+            statuses = df["COE STATUS"].dropna().unique().tolist()
+            selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab7")
+            contact_df = df[df["COE STATUS"].isin(selected_statuses)][["Provider Student ID", "FIRST NAME", "SECOND NAME", "FAMILY NAME"]].drop_duplicates()
+            if "Is Duplicate" in df.columns:
+                contact_df = pd.merge(contact_df, df[["Provider Student ID", "Is Duplicate"]], on="Provider Student ID", how="left")
+                contact_df["Duplicate Flag"] = contact_df["Is Duplicate"].apply(lambda x: "Yes" if x else "No")
+                contact_df.drop(columns=["Is Duplicate"], inplace=True)
+
+            csv = contact_df.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download Contact Sheet CSV", csv, file_name="contact_sheet.csv", mime="text/csv")
 
     except Exception as e:
-        st.error(f"❌ Failed to process file: {str(e)}")
+        st.error(f"❌ Error: {e}")
 else:
-    st.info("📌 Please upload an Excel file to get started.")
+    st.info("📤 Upload an Excel file to begin analysis.")
