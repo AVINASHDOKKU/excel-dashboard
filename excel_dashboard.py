@@ -2,17 +2,14 @@ import streamlit as st
 import pandas as pd
 import datetime
 
-# --- Branding ---
 st.set_page_config(page_title="COE Student Analyzer", layout="wide")
 st.markdown("""
 <div style='text-align: center'>
-    <img src='TEK4DAY.PNG' width='120'>
     <h2>COE Student Analyzer</h2>
     <p><em>Powered by TEK4DAY</em></p>
 </div>
 """, unsafe_allow_html=True)
 
-# --- Launch Button ---
 if 'launch' not in st.session_state:
     st.session_state.launch = False
 
@@ -21,10 +18,8 @@ if not st.session_state.launch:
         st.session_state.launch = True
     st.stop()
 
-# --- File Upload ---
 uploaded_file = st.file_uploader("📤 Upload your Excel file", type=["xlsx"])
 
-# --- Expected Columns ---
 expected_columns = {
     "COE CODE": "COE CODE",
     "COE STATUS": "COE STATUS",
@@ -37,12 +32,11 @@ expected_columns = {
     "PROPOSED START DATE": "Proposed Start Date",
     "PROPOSED END DATE": "Proposed End Date",
     "PROVIDER STUDENT ID": "Provider Student ID",
-    "VISA EXPIRY DATE": "Visa Expiry Date",
-    "AGENT": "AGENT",
-    "VISA NON GRANT STATUS": "Visa Non Grant Status"
+    "VISA END DATE": "Visa End Date",
+    "VISA NON GRANT STATUS": "Visa Non Grant Status",
+    "AGENT": "AGENT"
 }
 
-# --- Utility Functions ---
 def normalize_columns(df):
     df.columns = df.columns.str.strip().str.upper()
     return df
@@ -55,8 +49,8 @@ def preprocess_data(df):
     df = rename_columns(df)
     df["Proposed Start Date"] = pd.to_datetime(df.get("Proposed Start Date"), errors="coerce")
     df["Proposed End Date"] = pd.to_datetime(df.get("Proposed End Date"), errors="coerce")
-    if "Visa Expiry Date" in df.columns:
-        df["Visa Expiry Date"] = pd.to_datetime(df.get("Visa Expiry Date"), errors="coerce")
+    if "Visa End Date" in df.columns:
+        df["Visa End Date"] = pd.to_datetime(df.get("Visa End Date"), errors="coerce")
     df.dropna(subset=["Proposed Start Date", "Proposed End Date"], inplace=True)
     return df
 
@@ -77,16 +71,15 @@ def style_dates_and_duplicates(df):
     return df.style.apply(highlight_row, axis=1).format({
         "Proposed Start Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
         "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
-        "Visa Expiry Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
+        "Visa End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
     })
 
-# --- Analysis Modules ---
 def visa_expiry_tracker(df, days=30):
-    if "Visa Expiry Date" not in df.columns:
+    if "Visa End Date" not in df.columns:
         return pd.DataFrame()
     today = pd.to_datetime(datetime.date.today())
     future_limit = today + pd.to_timedelta(days, unit="d")
-    return df[(df["Visa Expiry Date"] >= today) & (df["Visa Expiry Date"] <= future_limit)]
+    return df[(df["Visa End Date"] >= today) & (df["Visa End Date"] <= future_limit)]
 
 def coe_expiry_tracker(df, within_days=30):
     future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(within_days, unit="d")
@@ -110,8 +103,6 @@ def agent_summary(df):
         ).reset_index()
     else:
         return pd.DataFrame()
-
-# --- Main App Logic ---
 if uploaded_file:
     try:
         df_raw = pd.read_excel(uploaded_file)
