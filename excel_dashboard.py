@@ -158,7 +158,7 @@ if uploaded_file:
             st.dataframe(df_visa_expiring, use_container_width=True)
 
             st.subheader("❌ Visa Refused Students")
-            if "Visa Non Grant Status" in df.columns:
+            if "Visa Non Grant Status" in df_filtered.columns:
                 df_visa_refused = df_filtered[df_filtered["Visa Non Grant Status"].str.lower() == "refused"]
                 st.write(f"❌ {len(df_visa_refused)} students with refused visa status")
                 st.dataframe(df_visa_refused, use_container_width=True)
