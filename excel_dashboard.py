@@ -3,6 +3,17 @@ import pandas as pd
 import datetime
 
 st.set_page_config(page_title="COE Student Analyzer", layout="wide")
+
+# --- Settings Section ---
+with st.expander("⚙️ Settings", expanded=False):
+    uploaded_logo = st.file_uploader("🖼️ Upload Logo (PNG or JPG)", type=["png", "jpg", "jpeg"], key="logo_upload")
+    if uploaded_logo:
+        st.session_state.logo = uploaded_logo
+
+# --- Display Logo and Title ---
+if 'logo' in st.session_state:
+    st.image(st.session_state.logo, width=150)
+
 st.markdown("""
 <div style='text-align: center'>
     <h2>COE Student Analyzer</h2>
@@ -10,6 +21,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# --- Launch Button ---
 if 'launch' not in st.session_state:
     st.session_state.launch = False
 
@@ -18,6 +30,7 @@ if not st.session_state.launch:
         st.session_state.launch = True
     st.stop()
 
+# --- File Upload ---
 uploaded_file = st.file_uploader("📤 Upload your Excel file", type=["xlsx"])
 
 expected_columns = {
@@ -37,6 +50,7 @@ expected_columns = {
     "AGENT": "AGENT"
 }
 
+# --- Helper Functions ---
 def normalize_columns(df):
     df.columns = df.columns.str.strip().str.upper()
     return df
@@ -103,6 +117,8 @@ def agent_summary(df):
         ).reset_index()
     else:
         return pd.DataFrame()
+
+# --- Main App Logic ---
 if uploaded_file:
     try:
         df_raw = pd.read_excel(uploaded_file)
@@ -192,4 +208,4 @@ if uploaded_file:
     except Exception as e:
         st.error(f"❌ Error: {e}")
 else:
-    st.info("📤 Upload an Excel file to begin analysis.")
+    st.info("📤 Upload an Excel file to begin")
