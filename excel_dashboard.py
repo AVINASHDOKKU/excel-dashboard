@@ -59,6 +59,7 @@ def preprocess_data(df):
         df["Visa Expiry Date"] = pd.to_datetime(df.get("Visa Expiry Date"), errors="coerce")
     df.dropna(subset=["Proposed Start Date", "Proposed End Date"], inplace=True)
     return df
+
 def detect_duplicates_by_id(filtered_df):
     dup_key = ["Provider Student ID"]
     filtered_df["Is Duplicate"] = filtered_df.duplicated(subset=dup_key, keep=False)
@@ -83,9 +84,9 @@ def style_dates_and_duplicates(df):
 def visa_expiry_tracker(df, days=30):
     if "Visa Expiry Date" not in df.columns:
         return pd.DataFrame()
-    future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(days, unit="d")
-    return df[(df["Visa Expiry Date"] >= pd.to_datetime(datetime.date.today())) & 
-              (df["Visa Expiry Date"] <= future_limit)]
+    today = pd.to_datetime(datetime.date.today())
+    future_limit = today + pd.to_timedelta(days, unit="d")
+    return df[(df["Visa Expiry Date"] >= today) & (df["Visa Expiry Date"] <= future_limit)]
 
 def coe_expiry_tracker(df, within_days=30):
     future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(within_days, unit="d")
