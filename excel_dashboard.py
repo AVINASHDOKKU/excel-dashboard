@@ -192,4 +192,4 @@ if uploaded_file:
     except Exception as e:
         st.error(f"❌ Error: {e}")
 else:
-    st.info("📤 Upload an Excel file to begin 
+    st.info("📤 Upload an Excel file to begin analysis.")
