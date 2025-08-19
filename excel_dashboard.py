@@ -1,32 +1,21 @@
 import streamlit as st
 import pandas as pd
-import datetime
+from datetime import datetime, timedelta
 
 # Page config
 st.set_page_config(page_title="COE Student Analyzer", layout="wide")
 
-# Logo and header (256x256 px)
+# Logo and header
 logo_url = "https://github.com/AVINASHDOKKU/excel-dashboard/blob/main/TEK4DAY.png?raw=true"
-st.markdown(
-    f"""
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div>
-            <h2>COE Student Analyzer</h2>
-            <p><em>Powered by TEK4DAY</em></p>
-        </div>
-        <div>
-            <img src="{logo_url}" width="256">
-        </div>
-    </div>
-    <hr>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown(f"""
+### COE Student Analyzer
+
+Powered by TEK4DAY
+""", unsafe_allow_html=True)
 
 # Launch control
 if 'launch' not in st.session_state:
     st.session_state.launch = False
-
 if not st.session_state.launch:
     if st.button("🚀 Launch Analyzer"):
         st.session_state.launch = True
@@ -75,16 +64,17 @@ def detect_duplicates_by_id(filtered_df):
     dup_key = ["Provider Student ID"]
     filtered_df["Is Duplicate"] = filtered_df.duplicated(subset=dup_key, keep=False)
     return filtered_df
-
 def style_dates_and_duplicates(df):
     max_cells = 250000
     if df.size > max_cells:
         st.warning("⚠️ Too many cells to style. Displaying without formatting.")
         return df
+
     def highlight_row(row):
         if row.get("Is Duplicate", False):
             return ['background-color: khaki'] * len(row)
         return [''] * len(row)
+
     return df.style.apply(highlight_row, axis=1).format({
         "Proposed Start Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
         "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
@@ -94,13 +84,13 @@ def style_dates_and_duplicates(df):
 def visa_expiry_tracker(df, days=30):
     if "Visa End Date" not in df.columns:
         return pd.DataFrame()
-    today = pd.to_datetime(datetime.date.today())
+    today = pd.to_datetime(datetime.today().date())
     future_limit = today + pd.to_timedelta(days, unit="d")
     return df[(df["Visa End Date"] >= today) & (df["Visa End Date"] <= future_limit)]
 
 def coe_expiry_tracker(df, within_days=30):
-    future_limit = pd.to_datetime(datetime.date.today()) + pd.to_timedelta(within_days, unit="d")
-    return df[(df["Proposed End Date"] >= pd.to_datetime(datetime.date.today())) &
+    future_limit = pd.to_datetime(datetime.today().date()) + pd.to_timedelta(within_days, unit="d")
+    return df[(df["Proposed End Date"] >= pd.to_datetime(datetime.today().date())) &
               (df["Proposed End Date"] <= future_limit)]
 
 def course_duration_validator(df):
@@ -120,14 +110,40 @@ def agent_summary(df):
         ).reset_index()
     else:
         return pd.DataFrame()
+
+# New: Course Date Calculator
+def course_date_calculator_tab():
+    st.subheader("📅 Course Date Calculator")
+
+    st.markdown("### 1. Calculate Course End Date")
+    start_date = st.date_input("Start Date", value=datetime.today())
+    duration_weeks = st.number_input("Duration (weeks)", min_value=1, value=1)
+    if st.button("Calculate End Date"):
+        end_date = start_date + timedelta(weeks=duration_weeks)
+        st.success(f"📅 End Date: {end_date.strftime('%Y-%m-%d')}")
+
+    st.markdown("---")
+
+    st.markdown("### 2. Calculate Weeks Between Two Dates")
+    proposed_start = st.date_input("Proposed Start Date", value=datetime.today(), key="start")
+    proposed_end = st.date_input("Proposed End Date", value=datetime.today(), key="end")
+    if st.button("Calculate Weeks Between"):
+        if proposed_end >= proposed_start:
+            delta_days = (proposed_end - proposed_start).days
+            weeks_between = delta_days // 7
+            st.success(f"📆 Total Weeks: {weeks_between} weeks")
+        else:
+            st.error("End date must be after start date.")
+
+# Main app logic
 if uploaded_file:
     try:
         df_raw = pd.read_excel(uploaded_file)
         df = preprocess_data(df_raw)
 
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-            "📅 Start Date Filter", "🛂 Visa Expiry", "📄 COE Expiry",
-            "⏳ Duration Check", "📈 Weekly Starts", "🤝 Agent Summary", "📥 Download Contacts"
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+            "📅 Start Date Filter", "🛂 Visa Expiry", "📄 COE Expiry", "⏳ Duration Check",
+            "📈 Weekly Starts", "🤝 Agent Summary", "📥 Download Contacts", "🧮 Course Date Calculator"
         ])
 
         with tab1:
@@ -150,8 +166,7 @@ if uploaded_file:
             statuses = df["COE STATUS"].dropna().unique().tolist()
             selected_statuses = st.multiselect("🎯 Select COE Status to include", statuses, default=statuses, key="status_tab2")
             df_filtered = df[df["COE STATUS"].isin(selected_statuses)]
-
-            st.subheader("🗓️ Visa Expiring in Next X Days")
+            st.subheader("📅 Visa Expiring in Next X Days")
             visa_days = st.slider("📆 Visa expiring in next X days", 7, 180, 30)
             df_visa_expiring = visa_expiry_tracker(df_filtered, visa_days)
             st.write(f"🛂 {len(df_visa_expiring)} students with visa expiring in {visa_days} days")
@@ -202,9 +217,11 @@ if uploaded_file:
                 contact_df = pd.merge(contact_df, df[["Provider Student ID", "Is Duplicate"]], on="Provider Student ID", how="left")
                 contact_df["Duplicate Flag"] = contact_df["Is Duplicate"].apply(lambda x: "Yes" if x else "No")
                 contact_df.drop(columns=["Is Duplicate"], inplace=True)
-
             csv = contact_df.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download Contact Sheet CSV", csv, file_name="contact_sheet.csv", mime="text/csv")
+
+        with tab8:
+            course_date_calculator_tab()
 
     except Exception as e:
         st.error(f"❌ Error: {e}")
