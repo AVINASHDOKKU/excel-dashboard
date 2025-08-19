@@ -44,52 +44,86 @@ if st.session_state.mode == "calculator":
             st.success(f"📆 Total Weeks: {weeks_between} weeks")
         else:
             st.error("End date must be after start date.")
-import streamlit as st
-import pandas as pd
-from datetime import datetime, timedelta
+# Analyzer functionality
+elif st.session_state.mode == "analyzer":
+    st.subheader("📊 COE Student Analyzer")
 
-# Page config
-st.set_page_config(page_title="COE Student Analyzer", layout="wide")
+    uploaded_file = st.file_uploader("📤 Upload your Excel file", type=["xlsx"])
 
-# Logo and header
-logo_url = "https://github.com/AVINASHDOKKU/excel-dashboard/blob/main/TEK4DAY.png?raw=true"
-st.image(logo_url, width=200)
+    expected_columns = {
+        "COE CODE": "COE CODE",
+        "COE STATUS": "COE STATUS",
+        "FIRST NAME": "FIRST NAME",
+        "SECOND NAME": "SECOND NAME",
+        "FAMILY NAME": "FAMILY NAME",
+        "COURSE CODE": "COURSE CODE",
+        "COURSE NAME": "COURSE NAME",
+        "DURATION IN WEEKS": "DURATION IN WEEKS",
+        "PROPOSED START DATE": "Proposed Start Date",
+        "PROPOSED END DATE": "Proposed End Date",
+        "PROVIDER STUDENT ID": "Provider Student ID",
+        "VISA END DATE": "Visa End Date",
+        "VISA NON GRANT STATUS": "Visa Non Grant Status",
+        "AGENT": "AGENT"
+    }
 
-# Launch control
-if 'mode' not in st.session_state:
-    st.session_state.mode = None
+    def normalize_columns(df):
+        df.columns = df.columns.str.strip().str.upper()
+        return df
 
-col1, col2 = st.columns([1, 1])
-with col1:
-    if st.button("🚀 Launch Analyzer"):
-        st.session_state.mode = "analyzer"
-with col2:
-    if st.button("📅 Course Date Calculator"):
-        st.session_state.mode = "calculator"
+    def rename_columns(df):
+        return df.rename(columns={col: expected_columns[col] for col in df.columns if col in expected_columns})
 
-# 📅 Course Date Calculator
-if st.session_state.mode == "calculator":
-    st.subheader("📅 Course Date Calculator")
+    def preprocess_data(df):
+        df = normalize_columns(df)
+        df = rename_columns(df)
+        df["Proposed Start Date"] = pd.to_datetime(df.get("Proposed Start Date"), errors="coerce")
+        df["Proposed End Date"] = pd.to_datetime(df.get("Proposed End Date"), errors="coerce")
+        if "Visa End Date" in df.columns:
+            df["Visa End Date"] = pd.to_datetime(df.get("Visa End Date"), errors="coerce")
+        df.dropna(subset=["Proposed Start Date", "Proposed End Date"], inplace=True)
+        return df
 
-    st.markdown("### 1. Calculate Course End Date")
-    start_date = st.date_input("Start Date", value=datetime.today(), format="DD/MM/YYYY")
-    duration_weeks = st.number_input("Duration (weeks)", min_value=1, value=1)
-    if st.button("Calculate End Date"):
-        end_date = start_date + timedelta(weeks=duration_weeks)
-        st.success(f"📅 End Date: {end_date.strftime('%d/%m/%Y')}")
+    def detect_duplicates_by_id(df):
+        df["Is Duplicate"] = df.duplicated(subset=["Provider Student ID"], keep=False)
+        return df
 
-    st.markdown("---")
+    def style_dates_and_duplicates(df):
+        def highlight_row(row):
+            return ['background-color: khaki'] * len(row) if row.get("Is Duplicate", False) else [''] * len(row)
 
-    st.markdown("### 2. Calculate Weeks Between Two Dates")
-    proposed_start = st.date_input("Proposed Start Date", value=datetime.today(), key="start", format="DD/MM/YYYY")
-    proposed_end = st.date_input("Proposed End Date", value=datetime.today(), key="end", format="DD/MM/YYYY")
-    if st.button("Calculate Weeks Between"):
-        if proposed_end >= proposed_start:
-            delta_days = (proposed_end - proposed_start).days
-            weeks_between = delta_days // 7
-            st.success(f"📆 Total Weeks: {weeks_between} weeks")
-        else:
-            st.error("End date must be after start date.")
+        return df.style.apply(highlight_row, axis=1).format({
+            "Proposed Start Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
+            "Proposed End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "",
+            "Visa End Date": lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else ""
+        })
+
+    def visa_expiry_tracker(df, days=30):
+        today = pd.to_datetime(datetime.today().date())
+        future_limit = today + pd.to_timedelta(days, unit="d")
+        return df[(df["Visa End Date"] >= today) & (df["Visa End Date"] <= future_limit)]
+
+    def coe_expiry_tracker(df, within_days=30):
+        today = pd.to_datetime(datetime.today().date())
+        future_limit = today + pd.to_timedelta(within_days, unit="d")
+        return df[(df["Proposed End Date"] >= today) & (df["Proposed End Date"] <= future_limit)]
+
+    def course_duration_validator(df):
+        df["Actual Weeks"] = (df["Proposed End Date"] - df["Proposed Start Date"]).dt.days // 7
+        df["Duration Mismatch"] = df["Actual Weeks"] != df["DURATION IN WEEKS"]
+        return df[df["Duration Mismatch"]]
+
+    def weekly_start_count(df):
+        df["Start Week"] = df["Proposed Start Date"].dt.isocalendar().week
+        return df.groupby("Start Week")["Provider Student ID"].count().reset_index(name="Number of Starts")
+
+    def agent_summary(df):
+        if "AGENT" in df.columns:
+            return df.groupby("AGENT").agg(
+                Total_Students=("Provider Student ID", "count"),
+                Active_Students=("COE STATUS", lambda x: (x == "Active").sum())
+            ).reset_index()
+        return pd.DataFrame()
 # Analyzer Tabs
             tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
                 "📅 Start Date Filter", "🛂 Visa Expiry", "📄 COE Expiry",
