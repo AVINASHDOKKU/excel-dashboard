@@ -23,7 +23,6 @@ with col1:
 with col2:
     if st.button("📅 Course Date Calculator"):
         st.session_state.show_calculator = True
-        st.stop()
 
 # Course Date Calculator Section
 if st.session_state.get("show_calculator", False):
