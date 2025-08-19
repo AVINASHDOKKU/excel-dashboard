@@ -211,3 +211,7 @@ with tab1:
                     contact_df.drop(columns=["Is Duplicate"], inplace=True)
                 csv = contact_df.to_csv(index=False).encode('utf-8')
                 st.download_button("📥 Download Contact Sheet CSV", csv, file_name="contact_sheet.csv", mime="text/csv", key="download_contacts")
+except Exception as e:
+            st.error(f"❌ Error: {e}")
+    else:
+        st.info("📤 Upload an Excel file to begin")
