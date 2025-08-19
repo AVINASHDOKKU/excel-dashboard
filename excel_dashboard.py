@@ -7,7 +7,9 @@ st.set_page_config(page_title="COE Student Analyzer", layout="wide")
 
 # Logo and header
 logo_url = "https://github.com/AVINASHDOKKU/excel-dashboard/blob/main/TEK4DAY.png?raw=true"
-st.image(logo_url, width=300)  # Logo size doubled
+col1, col2 = st.columns([6, 1])
+with col2:
+    st.image(logo_url, width=300)
 st.markdown("""
 ### COE Student Analyzer  
 Powered by TEK4DAY  
