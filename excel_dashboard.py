@@ -7,9 +7,7 @@ st.set_page_config(page_title="COE Student Analyzer", layout="wide")
 
 # Logo and header
 logo_url = "https://github.com/AVINASHDOKKU/excel-dashboard/blob/main/TEK4DAY.png?raw=true"
-col1, col2 = st.columns([6, 1])
-with col2:
-    st.image(logo_url, width=300)
+st.image(logo_url, width=150)
 st.markdown("""
 ### COE Student Analyzer  
 Powered by TEK4DAY  
@@ -18,6 +16,7 @@ Powered by TEK4DAY
 # Feature Tabs
 feature_tab = st.tabs(["📊 Analyzer", "📅 Course Date Calculator"])
 
+# -------------------- 📊 ANALYZER --------------------
 with feature_tab[0]:
     uploaded_file = st.file_uploader("📤 Upload your Excel file", type=["xlsx"])
 
@@ -142,7 +141,6 @@ with feature_tab[0]:
                 df_visa_expiring = visa_expiry_tracker(df_filtered, visa_days)
                 st.write(f"🛂 {len(df_visa_expiring)} students with visa expiring in {visa_days} days")
                 st.dataframe(df_visa_expiring, use_container_width=True)
-
                 st.subheader("❌ Visa Refused Students")
                 if "Visa Non Grant Status" in df_filtered.columns:
                     df_visa_refused = df_filtered[df_filtered["Visa Non Grant Status"].astype(str).str.lower() == "refused"]
@@ -195,3 +193,23 @@ with feature_tab[0]:
             st.error(f"❌ Error: {e}")
     else:
         st.info("📤 Upload an Excel file to begin")
+
+# -------------------- 📅 COURSE DATE CALCULATOR --------------------
+with feature_tab[1]:
+    st.subheader("📅 Course Date Calculator")
+
+    # Forward Calculator
+    st.markdown("### 📘 Forward Calculator")
+    start_date = st.date_input("Enter Course Start Date (dd/mm/yyyy)", key="forward_start")
+    duration_weeks = st.number_input("Enter Duration (in weeks)", min_value=1, step=1, key="forward_duration")
+    if start_date and duration_weeks:
+        finish_date = start_date + datetime.timedelta(weeks=duration_weeks)
+        st.success(f"🎯 Course Finish Date: {finish_date.strftime('%d/%m/%Y')}")
+
+    # Reverse Calculator
+    st.markdown("### 🔁 Reverse Calculator")
+    proposed_start = st.date_input("Enter Proposed Start Date (dd/mm/yyyy)", key="reverse_start")
+    proposed_end = st.date_input("Enter Proposed End Date (dd/mm/yyyy)", key="reverse_end")
+    if proposed_start and proposed_end and proposed_end > proposed_start:
+        total_weeks = (proposed_end - proposed_start).days // 7
+        st.success(f"📆 Total Number of Weeks: {total_weeks}")
