@@ -3,13 +3,13 @@ import pandas as pd
 import datetime
 
 # Page config
-st.set_page_config(page_title="COE Student Analyzer", layout="wide")
+st.set_page_config(page_title="COE Student Analyser", layout="wide")
 
 # Logo and header
 logo_url = "https://github.com/AVINASHDOKKU/excel-dashboard/blob/main/TEK4DAY.png?raw=true"
 st.image(logo_url, width=150)
 st.markdown("""
-### COE Student Analyzer  
+### COE Student Analyser  
 Powered by TEK4DAY  
 """, unsafe_allow_html=True)
 
