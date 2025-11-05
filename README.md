@@ -1,4 +1,4 @@
-# 📘 COE Student Analyzer
+# 📘 COE Student Analyser
 
 A Streamlit-based web application designed to help education providers and agents analyze Confirmation of Enrolment (COE) data for international students. Upload an Excel file and explore insights like visa expiry tracking, COE expiry, course duration mismatches, agent summaries, and more.
 
